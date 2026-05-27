@@ -9,9 +9,12 @@
     "dev": "ts-node src/index.ts",
     "run:hunter": "ts-node src/workflows/pain-point-hunter.ts",
     "run:creator": "ts-node src/workflows/content-creator.ts",
+    "run:engager": "ts-node src/workflows/community-engager.ts",
+    "run:reddit": "ts-node src/workflows/reddit-community.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.53.0",
     "@tavily/core": "^0.0.2",
     "dotenv": "^16.4.5",
     "nodemailer": "^6.9.13",

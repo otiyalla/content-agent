@@ -2,10 +2,14 @@ name: Zenlot Content Agent
 
 on:
   schedule:
-    # Pain Point Hunter runs every 6 hours
+    # Pain Point Hunter — every 12 hours
     - cron: '0 */12 * * *'
-    # Content Creator runs every 2 days at 14:00 UTC
+    # Content Creator — every 3 days at 14:00 UTC
     - cron: '0 14 */3 * *'
+    # Community Engager — daily at 10:00 UTC (peak forex Twitter activity)
+    - cron: '0 10 * * *'
+    # Reddit Community — daily at 13:00 UTC (midday US East, peak Reddit activity)
+    - cron: '0 13 * * *'
   workflow_dispatch:
     inputs:
       job_type:
@@ -16,6 +20,12 @@ on:
         options:
           - hunter
           - creator
+          - engager
+          - reddit
+
+defaults:
+  run:
+    working-directory: .
 
 jobs:
   run-agent:
@@ -29,17 +39,21 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          # Assuming the agent is in the content-agent folder
           cache-dependency-path: package-lock.json
 
       - name: Install Dependencies
-
         run: npm ci
 
-      - name: Run Pain Point Hunter
+      # ── Shared env block used by all steps ─────────────────────────────────
+      # Each step declares only the vars it needs; ANTHROPIC_API_KEY is primary
+      # for all LLM calls, OPENAI_API_KEY activates the automatic fallback.
 
-        if: github.event_name == 'schedule' && github.event.schedule == '0 */6 * * *' || github.event.inputs.job_type == 'hunter'
+      - name: Run Pain Point Hunter
+        if: |
+          (github.event_name == 'schedule' && github.event.schedule == '0 */12 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job_type == 'hunter')
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
@@ -61,9 +75,11 @@ jobs:
         run: npm run run:hunter
 
       - name: Run Content Creator
-
-        if: github.event_name == 'schedule' && github.event.schedule == '0 14 * * *' || github.event.inputs.job_type == 'creator'
+        if: |
+          (github.event_name == 'schedule' && github.event.schedule == '0 14 */3 * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job_type == 'creator')
         env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
@@ -72,3 +88,38 @@ jobs:
           TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
           DRY_RUN: 'false'
         run: npm run run:creator
+
+      - name: Run Community Engager
+        if: |
+          (github.event_name == 'schedule' && github.event.schedule == '0 10 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job_type == 'engager')
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
+          TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
+          TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
+          TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          DRY_RUN: 'false'
+        run: npm run run:engager
+
+      - name: Run Reddit Community
+        if: |
+          (github.event_name == 'schedule' && github.event.schedule == '0 13 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job_type == 'reddit')
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USERNAME: ${{ secrets.REDDIT_USERNAME }}
+          REDDIT_PASSWORD: ${{ secrets.REDDIT_PASSWORD }}
+          REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          DRY_RUN: 'false'
+        run: npm run run:reddit

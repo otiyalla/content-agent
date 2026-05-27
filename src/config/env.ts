@@ -5,7 +5,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const envSchema = z.object({
-  OPENAI_API_KEY: z.string().min(1, "OpenAI API Key is required"),
+  ANTHROPIC_API_KEY: z.string().min(1, "Anthropic API Key is required"),
+  OPENAI_API_KEY: z.string().optional(),
   TAVILY_API_KEY: z.string().optional(),
 
 

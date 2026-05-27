@@ -7,6 +7,13 @@ export interface SocialPost {
   content: string;
   url: string;
   platform: 'twitter' | 'reddit';
+  // Reddit-specific metadata (populated for reddit posts/comments only)
+  upvotes?: number;
+  commentCount?: number;
+  subreddit?: string;
+  awards?: number;
+  isComment?: boolean;
+  postTitle?: string; // original post title when this is a comment
 }
 
 export class TwitterService {
@@ -71,7 +78,42 @@ export class TwitterService {
   }
 
   /**
+   * Fetches recent tweets from a specific user by handle.
+   * Used by community-engager to monitor thought leaders.
+   */
+  async getUserRecentTweets(handle: string, maxResults: number = 5): Promise<SocialPost[]> {
+    if (!this.readOnlyClient) {
+      console.log(`[Mock Twitter] Getting recent tweets from @${handle}`);
+      return [];
+    }
+
+    try {
+      const user = await this.readOnlyClient.v2.userByUsername(handle);
+      if (!user.data) return [];
+
+      const timeline = await this.readOnlyClient.v2.userTimeline(user.data.id, {
+        max_results: Math.max(5, Math.min(100, maxResults)),
+        'tweet.fields': ['id', 'text', 'author_id', 'created_at', 'public_metrics'],
+        exclude: ['retweets', 'replies'],
+      });
+
+      const tweets = timeline.tweets || [];
+      return tweets.slice(0, maxResults).map((tweet) => ({
+        id: tweet.id,
+        authorId: handle,
+        content: tweet.text,
+        url: `https://twitter.com/${handle}/status/${tweet.id}`,
+        platform: 'twitter' as const,
+      }));
+    } catch (error) {
+      console.error(`Error fetching tweets from @${handle}:`, error);
+      return [];
+    }
+  }
+
+  /**
    * Splits a long text into multiple tweets of at most 280 characters.
+   * Thread tweets are numbered (1/n) for readability.
    */
   private splitIntoTweets(content: string): string[] {
     if (content.length <= 280) {

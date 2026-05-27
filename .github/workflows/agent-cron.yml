@@ -3,9 +3,9 @@ name: Zenlot Content Agent
 on:
   schedule:
     # Pain Point Hunter runs every 6 hours
-    - cron: '0 */6 * * *'
+    - cron: '0 */12 * * *'
     # Content Creator runs every 2 days at 14:00 UTC
-    - cron: '0 14 */2 * *'
+    - cron: '0 14 */3 * *'
   workflow_dispatch:
     inputs:
       job_type:

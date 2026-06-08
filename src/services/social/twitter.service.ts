@@ -14,10 +14,16 @@ export class TwitterService {
   private readOnlyClient: TwitterApiReadOnly | null = null;
 
   constructor() {
-    if (env.TWITTER_OAuth2_ACCESS_TOKEN) {
-      this.client = new TwitterApi(env.TWITTER_OAuth2_ACCESS_TOKEN);
-      this.readOnlyClient = this.client.readOnly;
-    } else if (
+    // --- Read-only client (for search) ---
+    // Twitter v2 search requires an App-only Bearer token, NOT a user access token.
+    // Use TWITTER_BEARER_TOKEN if available; otherwise fall back to OAuth 1.0a app credentials.
+    if (env.TWITTER_BEARER_TOKEN) {
+      this.readOnlyClient = new TwitterApi(env.TWITTER_BEARER_TOKEN).readOnly;
+    }
+
+    // --- Write client (for posting tweets) ---
+    // Prefer OAuth 1.0a user credentials, fall back to OAuth2 user access token.
+    if (
       env.TWITTER_APP_KEY &&
       env.TWITTER_APP_SECRET &&
       env.TWITTER_ACCESS_TOKEN &&
@@ -29,8 +35,19 @@ export class TwitterService {
         accessToken: env.TWITTER_ACCESS_TOKEN,
         accessSecret: env.TWITTER_ACCESS_SECRET,
       });
-      this.readOnlyClient = this.client.readOnly;
-    } else {
+      // If no bearer token was provided, also use OAuth 1.0a for reading
+      if (!this.readOnlyClient) {
+        this.readOnlyClient = this.client.readOnly;
+      }
+    } else if (env.TWITTER_OAuth2_ACCESS_TOKEN) {
+      // OAuth2 user access token — valid for posting but NOT for App-only search
+      this.client = new TwitterApi(env.TWITTER_OAuth2_ACCESS_TOKEN);
+      if (!this.readOnlyClient) {
+        this.readOnlyClient = this.client.readOnly;
+      }
+    }
+
+    if (!this.readOnlyClient) {
       console.warn('⚠️ Twitter credentials are not fully set. Twitter service will run in mock mode.');
     }
   }

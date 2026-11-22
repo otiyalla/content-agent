@@ -21,10 +21,11 @@ const CONTENT_CALENDAR: { type: ContentType; weight: number; topics: string[] }[
     type: 'personal',
     weight: 20,
     topics: [
-      'What I learned from talking to traders who blew their accounts',
-      'Why we built Zenlot around rules, not predictions',
-      'The moment I realized emotional trading has a structural fix',
-      'Building a risk app taught me this about trader psychology',
+      'I made more mistakes when I traded off my rules than on them. That is why Zenlot exists',
+      'My trading journal started as an Excel sheet that kept growing every week',
+      'Why a spreadsheet journal stopped working for me (no new features, laptop only, copying sheets by hand)',
+      'The feature I use most: seeing roughly what I could gain or lose before I enter',
+      'Writing down mistakes so I do not make the same one twice'
     ],
   },
   {

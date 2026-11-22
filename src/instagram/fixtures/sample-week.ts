@@ -1,0 +1,87 @@
+import type { PlannedPost } from '../types';
+
+// A hand-written week used to preview templates without calling the LLM:
+//   npm run ig:preview
+export const SAMPLE_POSTS: PlannedPost[] = [
+  {
+    slot: 0,
+    pillar: 'risk-math',
+    topic: 'Why losses are asymmetric',
+    slides: [
+      { layout: 'cover', kicker: 'Risk math', title: 'Losing 50% needs a **100%** gain to recover', body: 'The maths of drawdowns, and why protecting capital beats chasing returns.', stat: '', items: [], screen: '' },
+      { layout: 'stat', kicker: '', title: 'Lose 10%, you need +11%', body: 'Small drawdowns are easy to climb out of.', stat: '-10%', items: [], screen: '' },
+      { layout: 'stat', kicker: '', title: 'Lose 30%, you need +43%', body: 'Recovery gets harder faster than the loss grows.', stat: '-30%', items: [], screen: '' },
+      { layout: 'stat', kicker: '', title: 'Lose 50%, you need +100%', body: 'Now you must double your account just to break even.', stat: '-50%', items: [], screen: '' },
+      { layout: 'point', kicker: 'The fix', title: 'Cap risk at **1%** per trade', body: 'Ten losses in a row at 1% is a 9.6% drawdown. At 5% it is 40%. Position size is your real edge.', stat: '', items: [], screen: '' },
+      { layout: 'cta', kicker: '', title: 'Save this before your next trade', body: 'Zenlot shows the recommended lot size for your risk profile before you confirm a trade. Free, link in bio.', stat: '', items: [], screen: '' },
+    ],
+    caption: 'A 50% drawdown needs a 100% return just to get back to zero.',
+    hashtags: ['forextrading', 'riskmanagement', 'tradingpsychology'],
+    altText: 'Carousel explaining that losing 50% of an account requires a 100% gain to recover.',
+    rationale: 'Sample.',
+  },
+  {
+    slot: 1,
+    pillar: 'process',
+    topic: 'Pre-trade checklist',
+    slides: [
+      { layout: 'list', kicker: 'Pre-trade checklist', title: 'Before you click **buy**, answer these', body: '', stat: '', items: ['Where is my stop loss, exactly?', 'How much am I risking in money, not pips?', 'Is my reward at least 2x my risk?', 'Am I trading my plan, or my last loss?', 'Have I logged this setup in my journal?'], screen: '' },
+    ],
+    caption: 'Five questions. Thirty seconds.',
+    hashtags: ['forex', 'tradingjournal', 'daytrading'],
+    altText: 'Checklist of five questions to answer before entering a trade.',
+    rationale: 'Sample.',
+  },
+  {
+    slot: 2,
+    pillar: 'myth-busting',
+    topic: 'Win rate myth',
+    slides: [
+      { layout: 'mythfact', kicker: 'Myth vs fact', title: 'A high win rate means you are a profitable trader.', body: 'A 70% win rate loses money if your average loss is **3x** your average win. Track expectancy, not win rate.', stat: '', items: [], screen: '' },
+    ],
+    caption: 'Win rate is the most overrated number in trading.',
+    hashtags: ['forextrader', 'tradingtips', 'riskmanagement'],
+    altText: 'Myth versus fact card about win rate and profitability.',
+    rationale: 'Sample.',
+  },
+  {
+    slot: 3,
+    pillar: 'psychology',
+    topic: 'Revenge trading quote',
+    slides: [
+      { layout: 'quote', kicker: 'Psychology', title: 'The trade after a loss is the **most expensive** trade you will take.', body: 'Step away for 15 minutes', stat: '', items: [], screen: '' },
+    ],
+    caption: 'Revenge trading is not a strategy.',
+    hashtags: ['tradingpsychology', 'forexlife', 'mindset'],
+    altText: 'Quote card about revenge trading after a loss.',
+    rationale: 'Sample.',
+  },
+  {
+    slot: 4,
+    pillar: 'community',
+    topic: 'Engagement question',
+    slides: [
+      { layout: 'question', kicker: 'Your turn', title: 'What do you risk per trade?', body: '', stat: '', items: ['Under 1%', '1 to 2%', '3 to 5%', 'I do not track it'], screen: '' },
+    ],
+    caption: 'Be honest. Nobody is judging.',
+    hashtags: ['forex', 'tradingcommunity', 'riskmanagement'],
+    altText: 'Poll asking traders how much they risk per trade.',
+    rationale: 'Sample.',
+  },
+  {
+    slot: 2,
+    pillar: 'product',
+    topic: 'Zenlot product tour with real screens',
+    slides: [
+      { layout: 'cover', kicker: 'Inside Zenlot', title: 'Your journal should **catch** what you miss', body: 'Three screens that turn trades into a routine.', stat: '', items: [], screen: '' },
+      { layout: 'screen', kicker: 'Set limits', title: 'Decide your risk **once**', body: 'Max risk per trade, daily and weekly drawdown limits.', stat: '', items: [], screen: 'risk-profile' },
+      { layout: 'screen', kicker: 'Review', title: 'Every trade, with its **reason**', body: 'Search by pair, outcome or what you wrote.', stat: '', items: [], screen: 'history' },
+      { layout: 'screen', kicker: 'Insights', title: 'Patterns you can **act on**', body: 'After 10 evaluated trades, Zenlot flags recurring habits with evidence.', stat: '', items: [], screen: 'insights' },
+      { layout: 'cta', kicker: '', title: 'Build discipline. Trade by your rules.', body: 'Zenlot is free on iOS and Android. Link in bio.', stat: '', items: [], screen: '' },
+    ],
+    caption: 'A tour of Zenlot.',
+    hashtags: ['forextrading', 'tradingjournal'],
+    altText: 'Carousel showing Zenlot app screens: risk profile, trade history and behavioural insights.',
+    rationale: 'Sample.',
+  },
+];

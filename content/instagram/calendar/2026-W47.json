@@ -1,0 +1,83 @@
+{
+  "week": "2026-W47",
+  "theme": "Welcome to Zenlot",
+  "generatedAt": "2026-11-19T03:53:55.000Z",
+  "posts": [
+    {
+      "id": "2026-W47-welcome",
+      "scheduledAt": "2026-11-19T03:52:55.000Z",
+      "status": "published",
+      "pillar": "product",
+      "topic": "Welcome post: what Zenlot is and what this account will share",
+      "slides": [
+        {
+          "layout": "cover",
+          "kicker": "Welcome",
+          "title": "Build discipline and trade by **your rules**",
+          "body": "Zenlot is a free forex trading journal. Here is what this page is for.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "01",
+          "title": "Risk maths you can **actually use**",
+          "body": "Position sizing, drawdowns and reward-to-risk, explained with real numbers instead of hype.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "02",
+          "title": "The psychology behind **bad trades**",
+          "body": "Revenge trading, moved stops and overtrading, plus the simple routines that break the loop.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "screen",
+          "kicker": "Inside Zenlot",
+          "title": "Patterns you can **act on**",
+          "body": "Log trades, review them, and see the habits behind your results.",
+          "stat": "",
+          "items": [],
+          "screen": "insights"
+        },
+        {
+          "layout": "cta",
+          "kicker": "",
+          "title": "Follow for weekly lessons",
+          "body": "Zenlot is free on iOS and Android. Search \"Zenlot\" on the App Store or Google Play.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        }
+      ],
+      "caption": "Most traders don't need another strategy. They need rules they actually follow.\n\nThat's why we built Zenlot: a free forex trading journal that helps you plan, record and review every trade against your own rules.\n\nOn this page, every week:\n• Risk maths with real numbers (position sizing, drawdowns, R:R)\n• Trader psychology and the habits behind blown accounts\n• Checklists and review routines you can copy\n\nFollow along, and tell us in the comments: what's the one trading rule you find hardest to stick to?\n\nZenlot is free on iOS and Android.\n\nEducational content, not financial advice.",
+      "hashtags": [
+        "forextrading",
+        "tradingjournal",
+        "riskmanagement",
+        "tradingpsychology",
+        "forexeducation"
+      ],
+      "altText": "Welcome carousel from Zenlot: build discipline and trade by your rules. Slides cover risk maths, trading psychology, and a Zenlot app screen showing behavioural insights.",
+      "rationale": "First post on a new account: sets expectations, introduces the product once, and asks a question to start comments.",
+      "published": {
+        "mediaId": "18082002116475228",
+        "permalink": "https://www.instagram.com/p/Df6KdA_IZCz/",
+        "publishedAt": "2026-11-19T03:55:22.028Z",
+        "imageUrls": [
+          "https://social.zenlot.net/instagram/2026-W47/2026-W47-welcome/1-07731a4d94ea.jpg",
+          "https://social.zenlot.net/instagram/2026-W47/2026-W47-welcome/2-ad1d31a49b7b.jpg",
+          "https://social.zenlot.net/instagram/2026-W47/2026-W47-welcome/3-aad85fb71e61.jpg",
+          "https://social.zenlot.net/instagram/2026-W47/2026-W47-welcome/4-5a38d202303e.jpg",
+          "https://social.zenlot.net/instagram/2026-W47/2026-W47-welcome/5-d5b0b1fca511.jpg"
+        ]
+      }
+    }
+  ]
+}

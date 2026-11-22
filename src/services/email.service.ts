@@ -21,6 +21,45 @@ export class EmailService {
   }
 
   /**
+   * Sends an HTML email with optional inline images (reference them as
+   * <img src="cid:CID">). In dry-run mode the HTML is written to disk instead.
+   */
+  async sendHtml(
+    subject: string,
+    html: string,
+    attachments: Array<{ filename: string; content: Buffer; cid?: string }> = [],
+    dryRunPath?: string,
+  ): Promise<boolean> {
+    if (!this.transporter || env.DRY_RUN) {
+      console.log(`[DRY RUN - Email] To: ${env.EMAIL_TO} | Subject: ${subject} | ${attachments.length} attachment(s)`);
+      if (dryRunPath) {
+        // Rewrite cid: references to the local file names so the preview opens in a browser.
+        const fs = await import('fs');
+        const path = await import('path');
+        fs.mkdirSync(path.dirname(dryRunPath), { recursive: true });
+        let local = html;
+        for (const a of attachments) {
+          if (!a.cid) continue;
+          fs.writeFileSync(path.join(path.dirname(dryRunPath), a.filename), a.content);
+          local = local.split(`cid:${a.cid}`).join(a.filename);
+        }
+        fs.writeFileSync(dryRunPath, local);
+        console.log(`  Preview written to ${dryRunPath}`);
+      }
+      return true;
+    }
+
+    try {
+      await this.transporter.sendMail({ from: env.EMAIL_FROM, to: env.EMAIL_TO, subject, html, attachments });
+      console.log(`✅ Email "${subject}" sent to ${env.EMAIL_TO}`);
+      return true;
+    } catch (error) {
+      console.error(`Error sending email "${subject}":`, error);
+      return false;
+    }
+  }
+
+  /**
    * Sends a feature request email to the team based on a user's pain point.
    */
   async sendFeatureRequest(originalPost: string, featureRequestText: string, platform: string, url: string): Promise<boolean> {

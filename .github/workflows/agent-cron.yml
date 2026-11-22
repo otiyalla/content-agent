@@ -1,5 +1,8 @@
 name: Zenlot Content Agent
 
+# Safety switch: these agents run in dry-run mode (no posts, replies or emails) until the
+# repository variable AGENTS_LIVE is "true". Instagram has its own switch (IG_LIVE).
+
 on:
   schedule:
     # Pain Point Hunter — every 12 hours
@@ -37,7 +40,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
@@ -45,8 +48,8 @@ jobs:
         run: npm ci
 
       # ── Shared env block used by all steps ─────────────────────────────────
-      # Each step declares only the vars it needs; ANTHROPIC_API_KEY is primary
-      # for all LLM calls, OPENAI_API_KEY activates the automatic fallback.
+      # Each step declares only the vars it needs. LLM chain: ANTHROPIC_API_KEY is primary,
+      # OPENAI_API_KEY is the first fallback, XAI_API_KEY (Grok) the second.
 
       - name: Run Pain Point Hunter
         if: |
@@ -55,6 +58,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
           TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
@@ -71,7 +75,7 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          DRY_RUN: 'false'
+          DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
         run: npm run run:hunter
 
       - name: Run Content Creator
@@ -81,12 +85,13 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
           TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
-          DRY_RUN: 'false'
+          DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
         run: npm run run:creator
 
       - name: Run Community Engager
@@ -96,11 +101,12 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           TWITTER_APP_KEY: ${{ secrets.TWITTER_APP_KEY }}
           TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
-          DRY_RUN: 'false'
+          DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
         run: npm run run:engager
 
       - name: Run Reddit Community
@@ -110,6 +116,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           REDDIT_USERNAME: ${{ secrets.REDDIT_USERNAME }}
@@ -121,5 +128,5 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          DRY_RUN: 'false'
+          DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
         run: npm run run:reddit

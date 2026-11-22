@@ -1,0 +1,303 @@
+{
+  "week": "2026-W48",
+  "theme": "Survival maths: why protecting the downside decides who is still trading next year",
+  "generatedAt": "2026-11-19T00:31:14.142Z",
+  "posts": [
+    {
+      "id": "2026-W48-mon",
+      "scheduledAt": "2026-11-23T13:00:00.000Z",
+      "status": "scheduled",
+      "pillar": "risk-math",
+      "topic": "Drawdown recovery asymmetry: the deeper the loss, the steeper the climb back, and how risk per trade sets the depth",
+      "slides": [
+        {
+          "layout": "cover",
+          "kicker": "Risk math",
+          "title": "A **50%** loss needs a **100%** gain to recover",
+          "body": "The maths that decides who's still trading next year.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "stat",
+          "kicker": "",
+          "title": "To recover from a 10% loss",
+          "body": "$10,000 becomes $9,000. Getting back needs $1,000 on $9,000: **11.1%**.",
+          "stat": "+11.1%",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "stat",
+          "kicker": "",
+          "title": "To recover from a 30% loss",
+          "body": "$7,000 needs $3,000 to get back to $10,000. That's 3 ÷ 7 = **42.9%**.",
+          "stat": "+42.9%",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "stat",
+          "kicker": "",
+          "title": "To recover from a 50% loss",
+          "body": "Half the account gone means you must **double** what's left. Formula: 1 ÷ (1 − loss) − 1.",
+          "stat": "+100%",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "Why sizing matters",
+          "title": "Same 10 losses. Very different damage.",
+          "body": "10 straight losses at 1% risk: about **−9.6%**. At 5% risk: about **−40%**, which needs roughly +67% just to break even.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "cta",
+          "kicker": "",
+          "title": "Save this before your next drawdown",
+          "body": "Share it with the trading friend who sizes up after a loss.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        }
+      ],
+      "caption": "Losses and gains aren't symmetric. That one fact quietly ends most trading accounts.\n\nWhen your account shrinks, every future % gain is calculated on a smaller base. So the deeper the hole, the steeper the climb:\n\n−10% needs +11.1%\n−30% needs +42.9%\n−50% needs +100%\n\nThe formula: required gain = 1 ÷ (1 − loss) − 1.\n\nThe part most people miss: you don't control whether a losing streak arrives. You do control how deep it digs. Risk 1% per trade and 10 straight losses leaves you around −9.6%. Risk 5% and the same streak leaves you near −40%, needing roughly +67% just to get back to where you started.\n\nRisk per trade is the one dial that decides which side of this curve you live on.\n\nSave this, and send it to someone who's planning to \"win it back.\"\n\nEducational content, not financial advice.",
+      "hashtags": [
+        "riskmanagement",
+        "forextrading",
+        "drawdown",
+        "forexeducation",
+        "tradingmath"
+      ],
+      "altText": "Dark slide with the headline: A 50% loss needs a 100% gain to recover. Subtitle: The maths that decides who's still trading next year.",
+      "rationale": "Fresh account with no performance data, so we open the week with the highest-save format for numerate education: a stepped stat carousel with a painful, verifiable truth in the hook. Every figure is derived from 1/(1−loss)−1 or compounding (0.99^10, 0.95^10), so it builds credibility from post one. It also sets up the theme the rest of the week references. This is our baseline for carousel saves."
+    },
+    {
+      "id": "2026-W48-tue",
+      "scheduledAt": "2026-11-24T13:00:00.000Z",
+      "status": "scheduled",
+      "pillar": "process",
+      "topic": "Six-point pre-trade checklist that turns impulses into decisions",
+      "slides": [
+        {
+          "layout": "list",
+          "kicker": "Pre-trade checklist",
+          "title": "6 checks before **any** entry",
+          "body": "",
+          "stat": "",
+          "items": [
+            "Stop-loss level decided",
+            "Risk capped at your set %",
+            "Lot size calculated, not guessed",
+            "Reward-to-risk written down",
+            "Reason for the trade in one line",
+            "Daily loss limit not yet hit"
+          ],
+          "screen": ""
+        }
+      ],
+      "caption": "Most bad trades are decided before the entry, not after it.\n\nA checklist won't make a trade win. What it does is make every loss a planned loss: known size, known exit, known reason. That's what keeps a drawdown shallow, which, as Monday's maths showed, is what keeps you in the game.\n\nOne extra rule that makes this work: if you can't fill in every line within about 10 seconds, that's your answer. Hesitation usually means the trade is an impulse looking for a justification.\n\nThe \"reason in one line\" item matters more than it looks. Later, when you review your journal, it's the only way to tell a good trade that lost from a bad trade that got lucky.\n\nSave this and run through it before your next entry. Share it with the friend who trades straight off a notification.\n\nEducational content, not financial advice.",
+      "hashtags": [
+        "tradingchecklist",
+        "riskmanagement",
+        "forextrading",
+        "tradingdiscipline",
+        "forexeducation"
+      ],
+      "altText": "Checklist titled 6 checks before any entry: stop-loss level decided, risk capped at your set percent, lot size calculated not guessed, reward-to-risk written down, reason for the trade in one line, daily loss limit not yet hit.",
+      "rationale": "Checklists are the most saveable single-image format, and the account has no data yet, so this tests whether practical, reusable tools out-save Monday's maths. It converts Monday's insight (keep drawdowns shallow) into action, reinforcing the theme. Its plain list layout also varies the grid between two carousels."
+    },
+    {
+      "id": "2026-W48-wed",
+      "scheduledAt": "2026-11-25T13:00:00.000Z",
+      "status": "scheduled",
+      "pillar": "psychology",
+      "topic": "Losing streaks are statistically normal; the reaction to them is the real danger",
+      "slides": [
+        {
+          "layout": "cover",
+          "kicker": "Trading psychology",
+          "title": "Your strategy isn't broken. **Five losses** are normal.",
+          "body": "What a losing streak actually means, in numbers.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "01",
+          "title": "A 40% win rate can still be profitable",
+          "body": "Illustrative: win 2R, lose 1R. Expectancy = 0.4 × 2 − 0.6 × 1 = **+0.2R** per trade.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "stat",
+          "kicker": "",
+          "title": "Chance any 5 trades all lose",
+          "body": "At a 40% win rate, each trade loses 60% of the time. 0.6⁵ ≈ **7.8%**, about 1 in 13.",
+          "stat": "7.8%",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "02",
+          "title": "Over 200 trades, a 5-loss streak is near-certain",
+          "body": "With odds like that, streaks aren't a warning sign. They're **the cost** of running a positive-expectancy strategy.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "03",
+          "title": "The streak isn't the danger. The **reaction** is.",
+          "body": "At 1% risk, five losses is about −4.9%. Doubling size to win it back is how a normal dip becomes an account-level event.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "list",
+          "kicker": "Streak protocol",
+          "title": "Decide this **before** the streak",
+          "body": "",
+          "stat": "",
+          "items": [
+            "Risk per trade stays fixed",
+            "Stop after a set daily loss",
+            "Review execution, not outcomes",
+            "Change rules in review, never mid-session"
+          ],
+          "screen": ""
+        },
+        {
+          "layout": "cta",
+          "kicker": "",
+          "title": "Save this for your next red week",
+          "body": "Send it to the friend who just said their strategy stopped working.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        }
+      ],
+      "caption": "Five losses in a row doesn't mean your strategy stopped working. Here's the maths.\n\nTake an illustrative strategy that wins 40% of the time at 2R and loses 60% at 1R. Expectancy is +0.2R per trade. Profitable over time.\n\nYet any five trades in a row will all lose about 7.8% of the time. Over a few hundred trades, that streak is close to guaranteed to show up.\n\nThe extra insight: judge your strategy on a large sample, and judge yourself on every trade. Ask \"did I follow my rules?\" after each loss, not \"did it work?\" Twenty trades can't tell you much about an edge. One trade can tell you a lot about your discipline.\n\nMost blown accounts don't come from the streak itself. They come from what the trader did during it.\n\nSave this for the next red week, and share it with someone in one right now.\n\nEducational content, not financial advice.",
+      "hashtags": [
+        "tradingpsychology",
+        "forextrading",
+        "riskmanagement",
+        "tradingmindset",
+        "forexeducation"
+      ],
+      "altText": "Slide with the headline: Your strategy isn't broken. Five losses are normal. Subtitle: What a losing streak actually means, in numbers.",
+      "rationale": "No historical data yet, so this deliberately tests the psychology pillar with a reassuring, contrarian hook aimed at our core pain point (traders who blew accounts by revenge trading). It's highly shareable because readers send it to friends mid-drawdown. It links Monday's drawdown maths to behaviour, and all probabilities are shown (0.6^5, 0.99^5)."
+    },
+    {
+      "id": "2026-W48-thu",
+      "scheduledAt": "2026-11-26T13:00:00.000Z",
+      "status": "scheduled",
+      "pillar": "myth-busting",
+      "topic": "High win rate does not equal profitability; expectancy depends on payoff size",
+      "slides": [
+        {
+          "layout": "mythfact",
+          "kicker": "Myth vs fact",
+          "title": "A high win rate means a **profitable** strategy.",
+          "body": "Win 70% at +0.5R, lose 30% at −1.5R: expectancy = 0.35 − 0.45 = **−0.1R** per trade. Win rate without payoff is half the story.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        }
+      ],
+      "caption": "A 70% win rate can lose money. Steadily.\n\nExpectancy is what matters: (win rate × average win) − (loss rate × average loss).\n\nIn this illustrative example, 70% of trades win 0.5R and 30% lose 1.5R. That's 0.35R − 0.45R = −0.1R per trade. Over 100 trades, roughly −10R. It feels good almost every day and still drains the account.\n\nThe extra insight: high win rates often come from habits that hide risk. Taking profit early, then widening or removing the stop on losers so they \"have room to come back.\" The win rate climbs while the average loss quietly grows.\n\nThat's why tracking only wins and losses misleads you. Log the R of every trade, and your real numbers show up within weeks.\n\nSave this, and share it with the friend who's proud of their 80% hit rate.\n\nEducational content, not financial advice.",
+      "hashtags": [
+        "tradingmyths",
+        "forextrading",
+        "expectancy",
+        "riskmanagement",
+        "forexeducation"
+      ],
+      "altText": "Myth versus fact slide. Myth: A high win rate means a profitable strategy. Fact: Win 70% at plus 0.5R and lose 30% at minus 1.5R and expectancy is minus 0.1R per trade.",
+      "rationale": "Myth-vs-fact singles are shareable because they challenge a belief many beginners hold. With a fresh account, this also tests a contrarian single against Tuesday's checklist. It builds on Wednesday's expectancy maths from the opposite direction (a low win rate can win, a high one can lose), using fully shown arithmetic. It also adds a third single-image layout to the grid."
+    },
+    {
+      "id": "2026-W48-sat",
+      "scheduledAt": "2026-11-28T14:00:00.000Z",
+      "status": "scheduled",
+      "pillar": "product",
+      "topic": "Fixed lot sizes create hidden variable risk; size from risk % and stop distance (Zenlot weekly mention)",
+      "slides": [
+        {
+          "layout": "cover",
+          "kicker": "Position sizing",
+          "title": "Same lot size every trade? Your risk isn't **fixed**.",
+          "body": "Why \"I always trade 0.5 lots\" isn't a risk plan.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "The problem",
+          "title": "Same lots, different stops, different risk",
+          "body": "$5,000 account, ~$10/pip per lot. 0.5 lots with a 25-pip stop risks $125 (**2.5%**). Same lots, 60-pip stop: $300 (**6%**).",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "point",
+          "kicker": "The fix",
+          "title": "Size from **risk**, not habit",
+          "body": "Lots = risk $ ÷ (stop in pips × pip value per lot). Choose risk first, place the stop second, calculate size last.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "stat",
+          "kicker": "Worked example",
+          "title": "1% risk, 25-pip stop, $5,000 account",
+          "body": "$50 risk ÷ (25 pips × $10) = **0.2 lots**. If the stop is hit, you lose about $50.",
+          "stat": "0.2 lots",
+          "items": [],
+          "screen": ""
+        },
+        {
+          "layout": "screen",
+          "kicker": "In Zenlot",
+          "title": "Set your risk **once**",
+          "body": "Your limits size every position and check every trade.",
+          "stat": "",
+          "items": [],
+          "screen": "risk-profile"
+        },
+        {
+          "layout": "cta",
+          "kicker": "",
+          "title": "Save this formula for your next trade",
+          "body": "Prefer not to do it by hand every time? Try **Zenlot**, link in bio.",
+          "stat": "",
+          "items": [],
+          "screen": ""
+        }
+      ],
+      "caption": "Trading the same lot size every time feels consistent. It isn't.\n\nYour risk is lot size × stop distance × pip value. Keep the lots fixed and your risk swings with every stop you place. On a $5,000 account, 0.5 lots can mean 2.5% risk on one trade and 6% on the next.\n\nThe fix is to reverse the order: decide the risk, place the stop where the trade is invalid, then calculate the size.\n\nThe extra insight: fixed-% sizing also protects you in drawdowns. As the account shrinks, 1% becomes a smaller dollar amount, so your position size shrinks automatically. That slows the slide, which, as Monday's maths showed, makes recovery far easier.\n\nPip values vary by pair and account currency, so check yours. Or let Zenlot calculate it before every entry. Link in bio.\n\nSave the formula, and share it with a friend who trades \"the usual size.\"\n\nEducational content, not financial advice.",
+      "hashtags": [
+        "positionsizing",
+        "riskmanagement",
+        "forextrading",
+        "forexeducation",
+        "tradingtools"
+      ],
+      "altText": "Slide with the headline: Same lot size every trade? Your risk isn't fixed. Subtitle: Why I always trade 0.5 lots isn't a risk plan.",
+      "rationale": "This is the week's only Zenlot mention, scheduled last so four value-first posts build trust before it. It leads with a concrete problem and a worked formula that's worth saving even without the app. All figures check out (0.2 lots × $10 × 25 pips = $50; 0.5 × $10 × 60 = $300 = 6%). With no baseline yet, comparing its saves to Monday's carousel will show whether product posts can perform when they lead with education."
+    }
+  ]
+}

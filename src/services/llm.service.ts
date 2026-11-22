@@ -1,33 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
-import { env } from '../config/env';
-
-// ---------------------------------------------------------------------------
-// Clients
-// ---------------------------------------------------------------------------
-
-const claude = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
-
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY ?? 'missing' });
-
-if (!env.OPENAI_API_KEY) {
-  console.warn('[LLM] OPENAI_API_KEY is not set — fallback provider unavailable. Set it to enable automatic failover.');
-}
-
-// ---------------------------------------------------------------------------
-// Shared model config per operation
-// (Backend Architect mapping: complex → gpt-4o, simple/list → gpt-4o-mini)
-// ---------------------------------------------------------------------------
-
-const OPENAI_MODELS = {
-  analyzePainPoint: 'gpt-4o',
-  generatePost: 'gpt-4o',
-  generateSearchQueries: 'gpt-4o-mini',
-  scoreEngagementOpportunity: 'gpt-4o-mini',
-  generateRedditReply: 'gpt-4o',
-  generateRedditEducationalPost: 'gpt-4o',
-  synthesizeFeedback: 'gpt-4o',
-} as const;
+import { ZENLOT_PRODUCT } from '../config/zenlot';
+import { complete, LLMChainError } from './llm-providers';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -78,30 +50,15 @@ export interface SynthesizedFeatureRequest {
   source: 'reddit' | 'twitter' | 'mixed';
 }
 
-// Thrown when both Anthropic and OpenAI fail on the same operation.
-export class LLMDualProviderError extends Error {
-  constructor(
-    public readonly operation: string,
-    public readonly anthropicError: unknown,
-    public readonly openaiError: unknown,
-  ) {
-    super(`[LLM_DUAL_FAILURE] Both providers failed for op=${operation}`);
-    this.name = 'LLMDualProviderError';
-  }
-}
+// Kept for backwards compatibility: thrown when every provider (Claude, OpenAI, Grok) fails.
+export { LLMChainError as LLMDualProviderError };
 
 // ---------------------------------------------------------------------------
 // Shared prompts
 // ---------------------------------------------------------------------------
 
 const ZENLOT_CONTEXT = `
-Zenlot is a risk management app for forex traders. Core features:
-- Hard stop-loss enforcement (calculates position size based on risk %)
-- Risk-to-reward ratio tracking
-- Trade journaling with notes and performance analytics
-- Win rate, profitability, and drawdown analysis
-- Quick trade logging and open trade monitoring
-- Weekly/monthly performance reviews
+${ZENLOT_PRODUCT}
 `;
 
 const HOOK_FORMULAS = [
@@ -121,32 +78,6 @@ export class LLMService {
   // Internal helpers
   // -------------------------------------------------------------------------
 
-  /** Calls Claude and returns the raw text response. */
-  private async callClaude(prompt: string, maxTokens: number): Promise<string> {
-    const message = await claude.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    return message.content[0].type === 'text' ? message.content[0].text : '';
-  }
-
-  /** Calls OpenAI and returns the raw text response. */
-  private async callOpenAI(
-    model: string,
-    prompt: string,
-    maxTokens: number,
-  ): Promise<string> {
-    const response = await openai.chat.completions.create({
-      model,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-      // All prompts explicitly request JSON — safe to enable structured output
-      response_format: { type: 'json_object' },
-    });
-    return response.choices[0].message.content ?? '';
-  }
-
   /**
    * Extracts a JSON object or array from a text response.
    * Falls back to `defaultValue` if parsing fails.
@@ -160,37 +91,6 @@ export class LLMService {
       return JSON.parse(raw) as T;
     } catch {
       return defaultValue;
-    }
-  }
-
-  /**
-   * Tries the Anthropic function first. On any error, logs and falls back to
-   * the OpenAI function. If both fail, throws LLMDualProviderError.
-   *
-   * Callers never need to know which provider handled the request.
-   */
-  private async withFallback<T>(
-    anthropicFn: () => Promise<T>,
-    openAiFn: () => Promise<T>,
-    operationName: string,
-  ): Promise<T> {
-    try {
-      return await anthropicFn();
-    } catch (anthropicErr) {
-      const reason = anthropicErr instanceof Error ? anthropicErr.message : String(anthropicErr);
-      console.warn(
-        `[LLM_FALLBACK] op=${operationName} provider=openai reason="${reason}"`,
-      );
-
-      try {
-        return await openAiFn();
-      } catch (openaiErr) {
-        const oaiReason = openaiErr instanceof Error ? openaiErr.message : String(openaiErr);
-        console.error(
-          `[LLM_DUAL_FAILURE] op=${operationName} anthropicErr="${reason}" openaiErr="${oaiReason}"`,
-        );
-        throw new LLMDualProviderError(operationName, anthropicErr, openaiErr);
-      }
     }
   }
 
@@ -230,17 +130,8 @@ Reply in this exact JSON format:
       engagementScore: 0,
     };
 
-    return this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 1024);
-        return this.parseJson<PainPointAnalysis>(text, defaultValue);
-      },
-      async () => {
-        const text = await this.callOpenAI(OPENAI_MODELS.analyzePainPoint, prompt, 1024);
-        return this.parseJson<PainPointAnalysis>(text, defaultValue);
-      },
-      'analyzePainPoint',
-    );
+    const text = await complete('analyzePainPoint', prompt, { maxTokens: 1024, tier: 'complex', json: true });
+    return this.parseJson<PainPointAnalysis>(text, defaultValue);
   }
 
   /**
@@ -258,7 +149,7 @@ Reply in this exact JSON format:
       educational:
         'Write an educational thread that teaches a specific risk management concept. Lead with a strong hook, deliver 3-5 numbered insights, end with an actionable takeaway.',
       personal:
-        'Write a personal/behind-the-scenes post about building Zenlot or insights from working with forex traders. Authentic, not polished.',
+        'Write a first-person post from the founder about building Zenlot, using ONLY the facts in the founder story above (never invent scenes, numbers or outcomes). Authentic, not polished.',
       commentary:
         'Write sharp industry commentary on current market behaviour or a common trader mistake. Contrarian but backed by logic.',
       engagement:
@@ -269,7 +160,7 @@ Reply in this exact JSON format:
         'Write a relatable, slightly humorous take on trader psychology. Dry wit, no cringe. Must still deliver a kernel of insight.',
     };
 
-    const prompt = `You are running the Twitter account for Zenlot, a risk management app for forex traders.
+    const prompt = `You are running the Twitter account for Zenlot, a free forex trading journal app.
 ${ZENLOT_CONTEXT}
 
 Content type: ${contentType}
@@ -294,17 +185,8 @@ Return JSON:
 
     const defaultValue = { content: '', isThread: false, estimatedEngagement: 'low' as const };
 
-    const parsed = await this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 1024);
-        return this.parseJson(text, defaultValue);
-      },
-      async () => {
-        const text = await this.callOpenAI(OPENAI_MODELS.generatePost, prompt, 1024);
-        return this.parseJson(text, defaultValue);
-      },
-      'generatePost',
-    );
+    const text = await complete('generatePost', prompt, { maxTokens: 1024, tier: 'complex', json: true });
+    const parsed = this.parseJson(text, defaultValue);
 
     return { ...parsed, contentType };
   }
@@ -314,7 +196,7 @@ Return JSON:
    * Uses gpt-4o-mini on fallback — simple list task, doesn't need the big model.
    */
   async generateSearchQueries(existingQueries: string[]): Promise<string[]> {
-    const prompt = `You are a social media analyst for Zenlot, a forex risk management app.
+    const prompt = `You are a social media analyst for Zenlot, a free forex trading journal app.
 ${ZENLOT_CONTEXT}
 
 We currently search for traders using these queries: ${JSON.stringify(existingQueries)}
@@ -325,17 +207,8 @@ Make them conversational (how people actually tweet/post), not keyword stuffed.
 
 Return a JSON array of strings only: ["query1", "query2", ...]`;
 
-    return this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 512);
-        return this.parseJson<string[]>(text, []);
-      },
-      async () => {
-        const text = await this.callOpenAI(OPENAI_MODELS.generateSearchQueries, prompt, 512);
-        return this.parseJson<string[]>(text, []);
-      },
-      'generateSearchQueries',
-    );
+    const text = await complete('generateSearchQueries', prompt, { maxTokens: 512, tier: 'simple', json: true });
+    return this.parseJson<string[]>(text, []);
   }
 
   /**
@@ -353,7 +226,7 @@ Return a JSON array of strings only: ["query1", "query2", ...]`;
     subreddit: string,
     postTitle?: string,
   ): Promise<string | null> {
-    const prompt = `You are a forex risk management expert and the founder of Zenlot (a risk management app for forex traders) participating authentically in Reddit's r/${subreddit} community.
+    const prompt = `You are a forex risk management expert and the founder of Zenlot (a free forex trading journal app) participating authentically in Reddit's r/${subreddit} community.
 
 ${ZENLOT_CONTEXT}
 
@@ -364,27 +237,14 @@ Write a helpful Reddit reply following these rules:
 - 150-350 words. Use Reddit markdown (**bold**, paragraphs, occasional bullets — not walls of bullets).
 - Lead with genuine empathy and a concrete insight that proves you understand their situation.
 - The bulk of your reply (90%) must be pure value: specific actionable advice that helps them RIGHT NOW regardless of Zenlot.
-- Only in the last 1-2 sentences, if Zenlot directly solves their specific problem, mention it naturally as "something I built because I had this exact problem". If not relevant, omit it entirely.
+- Only in the last 1-2 sentences, if Zenlot directly solves their specific problem, mention it naturally and honestly using only the real founder story, e.g. "I kept making more mistakes when I traded off-plan, so my Excel journal slowly turned into an app, Zenlot (free)". Never invent other personal details. If not relevant, omit it entirely.
 - End with a genuine question that invites further discussion.
 - Sound like a real person who trades, not a marketing bot.
 
 Return ONLY the reply text — no JSON, no wrapper.`;
 
-    return this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 1024);
-        return text.trim() || null;
-      },
-      async () => {
-        const response = await openai.chat.completions.create({
-          model: OPENAI_MODELS.generateRedditReply,
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }],
-        });
-        return response.choices[0].message.content?.trim() ?? null;
-      },
-      'generateRedditReply',
-    );
+    const text = await complete('generateRedditReply', prompt, { maxTokens: 1024, tier: 'complex' });
+    return text.trim() || null;
   }
 
   /**
@@ -422,17 +282,8 @@ Return JSON:
 
     const defaultValue: RedditEducationalPost = { title: '', body: '', estimatedEngagement: 'low' };
 
-    return this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 2048);
-        return this.parseJson<RedditEducationalPost>(text, defaultValue);
-      },
-      async () => {
-        const text = await this.callOpenAI(OPENAI_MODELS.generateRedditEducationalPost, prompt, 2048);
-        return this.parseJson<RedditEducationalPost>(text, defaultValue);
-      },
-      'generateRedditEducationalPost',
-    );
+    const text = await complete('generateRedditEducationalPost', prompt, { maxTokens: 2048, tier: 'complex', json: true });
+    return this.parseJson<RedditEducationalPost>(text, defaultValue);
   }
 
   /**
@@ -451,7 +302,7 @@ Return JSON:
       .map((p, i) => `[${i + 1}] (${p.platform}) ${p.content.substring(0, 200)}`)
       .join('\n');
 
-    const prompt = `You are a Product Feedback Synthesizer for Zenlot, a forex risk management app.
+    const prompt = `You are a Product Feedback Synthesizer for Zenlot, a free forex trading journal app.
 ${ZENLOT_CONTEXT}
 
 The following are social media posts from traders expressing problems Zenlot doesn't currently solve.
@@ -479,17 +330,8 @@ Return a JSON array of up to 5 feature requests, most impactful first:
   }
 ]`;
 
-    return this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 2048);
-        return this.parseJson<SynthesizedFeatureRequest[]>(text, []);
-      },
-      async () => {
-        const text = await this.callOpenAI(OPENAI_MODELS.synthesizeFeedback, prompt, 2048);
-        return this.parseJson<SynthesizedFeatureRequest[]>(text, []);
-      },
-      'synthesizeFeedback',
-    );
+    const text = await complete('synthesizeFeedback', prompt, { maxTokens: 2048, tier: 'complex', json: true });
+    return this.parseJson<SynthesizedFeatureRequest[]>(text, []);
   }
 
   /**
@@ -500,7 +342,7 @@ Return a JSON array of up to 5 feature requests, most impactful first:
     postContent: string,
     authorFollowers?: number,
   ): Promise<{ score: number; addedValueReply: string | null; reason: string }> {
-    const prompt = `You are the Twitter strategist for Zenlot, a forex risk management app.
+    const prompt = `You are the Twitter strategist for Zenlot, a free forex trading journal app.
 ${ZENLOT_CONTEXT}
 
 A thought leader in the trading/forex space posted this:
@@ -524,21 +366,8 @@ Return JSON:
 
     const defaultValue = { score: 0, reason: '', addedValueReply: null };
 
-    return this.withFallback(
-      async () => {
-        const text = await this.callClaude(prompt, 512);
-        return this.parseJson(text, defaultValue);
-      },
-      async () => {
-        const text = await this.callOpenAI(
-          OPENAI_MODELS.scoreEngagementOpportunity,
-          prompt,
-          512,
-        );
-        return this.parseJson(text, defaultValue);
-      },
-      'scoreEngagementOpportunity',
-    );
+    const text = await complete('scoreEngagementOpportunity', prompt, { maxTokens: 512, tier: 'simple', json: true });
+    return this.parseJson(text, defaultValue);
   }
 }
 

@@ -5,7 +5,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const envSchema = z.object({
-  OPENAI_API_KEY: z.string().min(1, "OpenAI API Key is required"),
+  ANTHROPIC_API_KEY: z.string().min(1, "Anthropic API Key is required"),
+  OPENAI_API_KEY: z.string().optional(),
+  // xAI Grok — second backup LLM after OpenAI
+  XAI_API_KEY: z.string().optional(),
+  XAI_MODEL: z.string().optional(), // default grok-4.7
+  XAI_MODEL_SIMPLE: z.string().optional(), // default grok-4.3
   TAVILY_API_KEY: z.string().optional(),
 
 
@@ -32,6 +37,20 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('Zenlot Agent <info@zenlot.net>'),
   EMAIL_TO: z.string().default('info@zenlot.net'),
+
+  // Instagram (Instagram API with Instagram Login — no Facebook Page required)
+  IG_USER_ID: z.string().optional(),
+  IG_ACCESS_TOKEN: z.string().optional(),
+  IG_GRAPH_VERSION: z.string().default('v27.0'),
+  IG_API_HOST: z.string().optional(), // override token-based detection: graph.facebook.com | graph.instagram.com
+  IG_HANDLE: z.string().default('@zenlot_app'),
+
+  // Cloudflare R2 (public image hosting — Instagram fetches images by URL)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().default('zenlot-social'),
+  R2_PUBLIC_BASE_URL: z.string().optional(), // e.g. https://social.zenlot.net or https://pub-xxxx.r2.dev
 
   DRY_RUN: z.string().default('true').transform((val) => val === 'true'),
 });

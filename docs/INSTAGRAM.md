@@ -1,0 +1,118 @@
+# Instagram engine
+
+Plans, designs and publishes Zenlot's Instagram feed every week.
+
+```
+Sunday 16:00 UTC ─ planner ──► pulls insights on recent posts (what got saved/shared)
+                              ► Claude Opus 5.5 plans 5 posts for next week
+                              ► saves content/instagram/calendar/<week>.json (committed)
+                              ► renders every slide, emails the full preview + last week's report
+
+Mon–Thu 13:07, Sat 14:07 ─ publisher ──► renders the post from the calendar JSON
+                                       ► uploads JPEGs to Cloudflare R2
+                                       ► publishes via the Instagram API, records permalink
+18:07 daily ─ retry for anything that failed
+```
+
+**Posting schedule** (`src/instagram/calendar.ts` → `WEEKLY_SLOTS`): Mon carousel, Tue single,
+Wed carousel, Thu single, Sat carousel. 13:00 UTC hits London afternoon and the New York pre-open.
+
+## Reviewing and vetoing posts
+
+The Sunday email shows every slide and caption. Posts then go out automatically. To change anything,
+edit `content/instagram/calendar/<week>.json` on GitHub (the email links straight to it):
+
+| You want to | Do this |
+|---|---|
+| Stop a post | set `"status": "skipped"` |
+| Fix a typo / reword | edit `slides[].title`, `body`, `items`, or `caption` — images are re-rendered at publish time |
+| Move a post | change `scheduledAt` (ISO time, UTC) |
+| Steer next week | run the workflow manually with **notes**, e.g. "NFP is Friday" |
+| Re-plan a week | run the workflow manually with **force** ticked |
+
+Use `**double asterisks**` in slide text to highlight words in teal.
+
+## Running locally
+
+```bash
+npm run ig:preview                 # render the built-in sample posts → out/instagram/sample
+npm run ig:preview -- 2026-W48     # render a saved week
+npm run ig:plan                    # plan next week (DRY_RUN=true writes the email to out/…/preview.html)
+DRY_RUN=true npm run ig:publish -- --now 2026-11-23T13:07:00Z   # simulate a publish run
+```
+
+## One-time setup
+
+### 1. Instagram account + Meta app (≈20 min)
+
+Meta now sets new apps up with **Instagram API with Unified Login**. It gives a system-user token that
+**never expires**, and calls go to `graph.facebook.com`. The code detects the token type automatically.
+Older Instagram Login tokens (`IG…`, 60 days) still work too.
+
+1. Make sure @zenlot_app is a **public Professional** account (Business or Creator).
+2. <https://developers.facebook.com/apps> → **Create App** → use case: under **Content management**, choose
+   **Manage messaging & content on Instagram** → finish the wizard.
+3. In the use case, open **API setup with Unified login**. Connect a **business portfolio** (create one named "Zenlot" if needed).
+4. **Roles:** add @zenlot_app with the **Instagram Tester** role, then accept the invite at
+   instagram.com/accounts/manage_access/ → **Tester invites**.
+5. **Step 1 – Configure your app:** **Create new configuration** with asset @zenlot_app and permissions
+   `instagram_basic`, `instagram_content_publish`, `instagram_manage_insights`, `instagram_manage_comments`.
+   If `instagram_manage_insights` is missing, add it first under **Permissions and features**.
+   Select the configuration and save `https://info.zenlot.net/` as the redirect URL (it isn't used).
+6. **Step 2 – Generate access tokens:** **Generate token** next to zenlot_app. Put it in `.env` as `IG_ACCESS_TOKEN`,
+   and the number under the account name as `IG_USER_ID`.
+7. Check it with `npm run ig:whoami`. It shows the account, the API host, and whether publishing is allowed.
+
+Skip webhooks, business login and App Review. They're only needed to manage other people's accounts.
+
+### 2. Cloudflare R2 (≈5 min)
+
+1. Cloudflare dashboard → **R2** → **Create bucket** → name `zenlot-social`.
+2. Bucket → **Settings → Public access**: either connect a custom domain (e.g. `social.zenlot.net`, recommended)
+   or enable the `r2.dev` subdomain. Note the public URL.
+3. R2 → **Manage API tokens** → **Create API token** → permission **Object Read & Write**, scoped to `zenlot-social`.
+   Note the **Access Key ID**, **Secret Access Key**, and your **Account ID**.
+
+### 3. GitHub repository settings
+
+**Settings → Secrets and variables → Actions**
+
+Secrets:
+
+| Name | Value |
+|---|---|
+| `IG_USER_ID` | Instagram user ID from step 1 |
+| `IG_ACCESS_TOKEN` | Instagram token from step 1 |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | from step 2 |
+| `GH_SECRETS_TOKEN` | *(only for 60-day `IG…` tokens)* fine-grained PAT with **Secrets: Read and write** so the workflow can refresh the token weekly. Not needed for Unified Login system-user tokens, which never expire. |
+| `XAI_API_KEY` | xAI Grok key, the second backup LLM (from console.x.ai) |
+| `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `SMTP_*`, `EMAIL_*` | already used by the other agents |
+
+Variables:
+
+| Name | Value |
+|---|---|
+| `R2_PUBLIC_BASE_URL` | e.g. `https://social.zenlot.net` |
+| `R2_BUCKET` | `zenlot-social` |
+| `IG_HANDLE` | the account handle shown on every slide, e.g. `@zenlot_app` |
+| `IG_LIVE` | `true` to actually publish. **Leave unset until you've reviewed a dry run.** |
+
+### 4. Go live
+
+1. **Actions → Zenlot Instagram → Run workflow → plan**. Check the email and the uploaded `instagram-preview` artifact.
+2. Set the `IG_LIVE` variable to `true`. The next publisher run posts whatever is due.
+
+## LLM failover
+
+Every agent uses the same chain (`src/services/llm-providers.ts`): **Claude → OpenAI → xAI Grok**.
+Providers without a key are skipped. Each hop is logged as `[LLM_FALLBACK]` in the Action logs.
+The Instagram planner uses Claude Opus 5.5 with schema-enforced output; backups return JSON that is
+validated against the same schema before it is accepted.
+
+Product facts used by every prompt live in `src/config/zenlot.ts` (from info.zenlot.net). Update it when the app changes.
+
+## Costs
+
+- Claude Opus 5.5: one planning call per week (~3k in / ~10k out tokens): well under $1/month.
+- R2: free tier (10 GB storage, no egress fees). About 25 images/week ≈ 5 MB.
+- GitHub Actions: about 22 short runs/week.

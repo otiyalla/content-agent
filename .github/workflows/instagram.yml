@@ -1,0 +1,129 @@
+name: Zenlot Instagram
+
+# Sunday 16:00 UTC  → refresh token, pull insights, plan next week, email preview
+# Daily 13:07/14:07 → publish posts that are due (slots are 13:00 Mon–Thu, 14:00 Sat)
+# Daily 18:07       → retry anything that failed earlier in the day
+#
+# Safety switch: nothing is posted until the repository variable IG_LIVE is "true"
+# (Settings → Secrets and variables → Actions → Variables). Until then every run is a dry run.
+
+on:
+  schedule:
+    - cron: '0 16 * * 0'
+    - cron: '7 13,14,18 * * *'
+  workflow_dispatch:
+    inputs:
+      job_type:
+        description: 'What to run'
+        required: true
+        default: plan
+        type: choice
+        options: [plan, publish, refresh-token]
+      notes:
+        description: 'Optional steer for the planner (e.g. "NFP is Friday, focus on news-day risk")'
+        required: false
+        type: string
+      force:
+        description: 'Re-plan even if next week already has a calendar'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # commit calendar updates back to the repo
+
+concurrency:
+  group: instagram # never let planner and publisher write the calendar at the same time
+  cancel-in-progress: false
+
+env:
+  DRY_RUN: ${{ vars.IG_LIVE == 'true' && 'false' || 'true' }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+  IG_USER_ID: ${{ secrets.IG_USER_ID }}
+  IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+  IG_HANDLE: ${{ vars.IG_HANDLE }}
+  R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_BUCKET: ${{ vars.R2_BUCKET }}
+  R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+  SMTP_HOST: ${{ secrets.SMTP_HOST }}
+  SMTP_PORT: ${{ secrets.SMTP_PORT }}
+  SMTP_USER: ${{ secrets.SMTP_USER }}
+  SMTP_PASS: ${{ secrets.SMTP_PASS }}
+  EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+  EMAIL_TO: ${{ secrets.EMAIL_TO }}
+  HAS_GH_SECRETS_TOKEN: ${{ secrets.GH_SECRETS_TOKEN != '' }}
+
+jobs:
+  instagram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Decide job
+        id: job
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "type=${{ github.event.inputs.job_type }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 16 * * 0" ]; then
+            echo "type=plan" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=publish" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Long-lived Instagram tokens expire after 60 days; refreshing weekly keeps
+      # them alive. Needs GH_SECRETS_TOKEN: a fine-grained PAT for this repo with
+      # "Secrets: read and write". Skipped if not configured.
+      - name: Refresh Instagram token
+        if: (steps.job.outputs.type == 'plan' || steps.job.outputs.type == 'refresh-token') && env.HAS_GH_SECRETS_TOKEN == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_SECRETS_TOKEN }}
+        run: |
+          npx ts-node src/workflows/instagram-token.ts "$RUNNER_TEMP/ig_token"
+          if [ -s "$RUNNER_TEMP/ig_token" ]; then
+            echo "::add-mask::$(cat "$RUNNER_TEMP/ig_token")"
+            gh secret set IG_ACCESS_TOKEN --repo "$GITHUB_REPOSITORY" < "$RUNNER_TEMP/ig_token"
+            echo "IG_ACCESS_TOKEN=$(cat "$RUNNER_TEMP/ig_token")" >> "$GITHUB_ENV"
+            rm -f "$RUNNER_TEMP/ig_token"
+          fi
+
+      - name: Plan next week
+        if: steps.job.outputs.type == 'plan'
+        env:
+          IG_PLAN_NOTES: ${{ github.event.inputs.notes }}
+        run: npx ts-node src/workflows/instagram-planner.ts ${{ github.event.inputs.force == 'true' && '--force' || '' }}
+
+      - name: Publish due posts
+        if: steps.job.outputs.type == 'publish'
+        run: npx ts-node src/workflows/instagram-publisher.ts
+
+      - name: Upload preview
+        if: always() && steps.job.outputs.type == 'plan'
+        uses: actions/upload-artifact@v4
+        with:
+          name: instagram-preview
+          path: out/instagram
+          if-no-files-found: ignore
+
+      # Commit calendar changes (new plans, publish status, insights) even if a
+      # publish failed, so state is never lost.
+      - name: Commit calendar
+        if: always()
+        run: |
+          git config user.name "zenlot-content-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add content/instagram
+          if git diff --cached --quiet; then echo "No calendar changes"; exit 0; fi
+          git commit -m "chore(instagram): ${{ steps.job.outputs.type }} $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase
+          git push

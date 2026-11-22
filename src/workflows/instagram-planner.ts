@@ -82,13 +82,14 @@ async function main() {
 
   console.log(`📅 Instagram planner — ${weekLabel}${env.DRY_RUN ? ' [DRY RUN]' : ''}`);
 
+  // 1. Performance feedback loop. Always runs, even when next week is already
+  //    planned, so the calendar keeps collecting reach/saves/shares every Sunday.
+  await refreshInsights(4);
+
   if (loadCalendar(week) && !force) {
     console.log(`Calendar for ${week} already exists. Use --force to re-plan.`);
     return;
   }
-
-  // 1. Performance feedback loop
-  await refreshInsights(4);
   const history = recentPosts(6);
   const lastWeek = recentPosts(1);
 

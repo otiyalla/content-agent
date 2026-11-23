@@ -29,7 +29,8 @@ export const SLIDE_LAYOUTS = [
 export const PILLARS = [
   'risk-math', // position sizing, R:R, drawdown maths, expectancy
   'psychology', // revenge trading, FOMO, discipline, tilt
-  'process', // journaling, routines, weekly reviews, rules
+  'process', // routines, checklists, rules
+  'journaling', // reviewing trades, journal prompts, verdicts, judging process over outcome
   'myth-busting', // common bad advice corrected
   'community', // questions, polls, relatable moments
   'product', // Zenlot features, framed as a solution to a real problem

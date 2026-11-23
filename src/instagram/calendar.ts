@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import type { CalendarPost, WeekCalendar } from './types';
+import type { CalendarPost, Pillar, WeekCalendar } from './types';
 
 // ---------------------------------------------------------------------------
 // Weekly content calendar, stored as one JSON file per ISO week in
@@ -16,18 +16,25 @@ export interface Slot {
   day: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
   hourUtc: number;
   format: 'carousel' | 'single';
+  /** Recurring series name. It's the cover kicker, so followers recognise the slot at a glance. */
+  series: string;
+  /** Pillars this slot may use. */
+  pillars: Pillar[];
+  /** What the slot is for, for the planner. */
+  brief: string;
 }
 
-// 5 posts/week. Carousels earn the most saves and shares in finance education,
-// so they get the three strongest days. 13:00 UTC = London afternoon / New York
-// pre-open, when forex traders are most active. Saturday is a carousel because
-// the market is closed and traders do their weekly reviews.
+// 5 posts/week, all at 13:00 UTC (London afternoon / New York pre-open, when forex traders are active).
+// Each slot is a named series. The one Zenlot post a week goes mid-week on Wednesday, when traders are
+// active and can act on the link, alternating between product and founder.
+export const ZENLOT_SERIES = { product: 'Inside Zenlot', founder: 'From the Founder' } as const;
+
 export const WEEKLY_SLOTS: Slot[] = [
-  { day: 'mon', hourUtc: 13, format: 'carousel' },
-  { day: 'tue', hourUtc: 13, format: 'single' },
-  { day: 'wed', hourUtc: 13, format: 'carousel' },
-  { day: 'thu', hourUtc: 13, format: 'single' },
-  { day: 'sat', hourUtc: 14, format: 'carousel' },
+  { day: 'mon', hourUtc: 13, format: 'carousel', series: 'Survival Maths', pillars: ['risk-math'], brief: 'Risk maths with worked numbers: sizing, drawdowns, expectancy, R:R.' },
+  { day: 'tue', hourUtc: 13, format: 'single', series: 'Pre-Trade Check', pillars: ['process', 'myth-busting'], brief: 'One saveable rule, checklist or myth to check before entering a trade.' },
+  { day: 'wed', hourUtc: 13, format: 'carousel', series: 'Inside Zenlot', pillars: ['product', 'founder'], brief: 'The week\'s only Zenlot post. Product ("Inside Zenlot") or founder ("From the Founder"), alternating weekly. Lead with the problem.' },
+  { day: 'thu', hourUtc: 13, format: 'single', series: "Trader's Mind", pillars: ['psychology', 'community'], brief: 'Trading psychology: tilt, revenge trading, FOMO, discipline. A good home for a hypothetical scenario.' },
+  { day: 'sat', hourUtc: 13, format: 'carousel', series: 'Weekend Review', pillars: ['journaling'], brief: 'Markets are closed: how to review the week, journal a trade, read your own record, judge process over outcome.' },
 ];
 
 const DAY_OFFSET: Record<Slot['day'], number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 };

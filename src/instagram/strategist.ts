@@ -7,7 +7,8 @@ import { ZENLOT_PRODUCT } from '../config/zenlot';
 import { screensForPrompt } from './screens';
 import { qaPost } from './qa';
 import { WeekPlanSchema, type WeekPlan, type CalendarPost } from './types';
-import type { Slot } from './calendar';
+import { ZENLOT_SERIES, type Slot } from './calendar';
+import { seasonalNotes } from './seasonal';
 
 // ---------------------------------------------------------------------------
 // The Instagram strategist: plans a full week of posts in one structured call.
@@ -113,6 +114,7 @@ export interface PlanningContext {
   slots: Slot[];
   recentPosts: CalendarPost[]; // previous weeks, for de-duplication and learning
   notes?: string; // optional steer from a human, e.g. "focus on NFP week"
+  weekStart?: Date; // Monday of the planned week, for seasonal moments
 }
 
 // Below this many posts measured at the same age, rankings are noise.
@@ -187,7 +189,10 @@ export function performanceSummary(posts: CalendarPost[]): string {
 }
 
 function buildPrompt(ctx: PlanningContext): string {
-  const slotLines = ctx.slots.map((s, i) => `  slot ${i}: ${s.day.toUpperCase()} ${s.hourUtc}:00 UTC — ${s.format}`).join('\n');
+  const slotLines = ctx.slots
+    .map((s, i) => `  slot ${i}: ${s.day.toUpperCase()} ${s.hourUtc}:00 UTC — ${s.format} — series "${s.series}" — pillar ${s.pillars.join(' or ')}. ${s.brief}`)
+    .join('\n');
+  const season = ctx.weekStart ? seasonalNotes(ctx.weekStart) : '';
   const recentTitles = ctx.recentPosts.map((p) => `- (${p.pillar}) ${p.topic}`).join('\n') || '- none yet';
 
   return `You are Zenlot's Instagram strategist and content lead. Plan next week's Instagram feed posts.
@@ -198,11 +203,32 @@ Week: ${ctx.weekLabel}
 Slots to fill (one post per slot, use each slot index exactly once):
 ${slotLines}
 
-Pillar mix for the week: at least 2 posts on risk-math or process, at least 1 on psychology,
-and exactly one Zenlot post: a "product" post OR a "founder" post. Alternate them: if the most recent
-Zenlot post in the history below was "founder", make this week's "product", and vice versa (start with "founder"
-if there's no history, so new followers meet the person behind the app). Vary the layouts so the grid
-doesn't look repetitive.
+Each slot is a recurring series with its own pillar (above). Use the slot's pillar.
+The Wednesday slot is the week's only Zenlot post: "product" (series "${ZENLOT_SERIES.product}") OR "founder"
+(series "${ZENLOT_SERIES.founder}"). Alternate them: if the most recent Zenlot post in the history below was
+"founder", make this week's "product", and vice versa (start with "founder" if there's no history, so new
+followers meet the person behind the app). No other post mentions Zenlot except a soft "link in bio" on a cta slide.
+Vary the layouts so the grid doesn't look repetitive.
+
+# Series rules
+- The cover kicker (slide 1 kicker) is exactly the series name, so followers learn the series.
+- Set the "series" field to the series name.
+- The Saturday "Weekend Review" teaches reviewing and journaling: how to review a week, what to write after a
+  trade, judging process over outcome, reading patterns in your own record. It's the account's journaling content.
+- Exactly one post a week is a clearly hypothetical scenario ("Hypothetical: a trader risks 2% and..."), labelled
+  as hypothetical on the slide. Never present it as a real person or a real result.
+
+# Carousel slide 2
+Instagram re-shows carousels to people who skipped them, starting from slide 2. Write slide 2 as a second hook
+that makes sense on its own: a complete, striking statement or number, not a continuation of the cover.
+
+# Calls to action
+Rotate them. Across the week no ctaType is used more than twice, and at least 2 posts use "follow"
+(e.g. "Follow for more Survival Maths"). Don't end every caption with "save this / share it with the friend who".
+
+# Stand-alone posts
+Any post can be skipped or published late, so never refer to another post ("as Monday's maths showed",
+"yesterday's post", "earlier this week"). Repeat the key fact instead.
 
 # Founder posts
 Written in the founder's own first-person voice ("I"), using ONLY the facts in the founder story above.
@@ -211,7 +237,7 @@ so you don't repeat a mistake; why he wanted to see the possible gain or loss be
 post tells ONE part of the story, so over the weeks the account tells the whole thing. Never invent scenes,
 numbers, dates or outcomes. Never claim the founder is profitable or successful as a trader.
 Give the week a coherent theme so the posts reinforce each other.
-${ctx.notes ? `\nSteer from the team: ${ctx.notes}\n` : ''}
+${season ? `\n# Seasonal moment\n${season}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\n` : ''}
 # Performance so far
 ${performanceSummary(ctx.recentPosts)}
 
@@ -222,6 +248,10 @@ ${recentTitles}
 
 Produce the week plan.`;
 }
+
+// "as Monday's maths showed", "yesterday's post", "earlier this week": breaks if that post was skipped or late.
+const CROSS_DAY_REF =
+  /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)['’]s\s+(?:post|maths?|lesson|carousel|checklist|slide|numbers|example)|\byesterday['’]?s?\s+post|\bearlier this week\b|\b(?:last|previous|our last)\s+post\b/i;
 
 /** Validates structural rules the schema can't express, and repairs what it safely can. */
 export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]> {
@@ -246,6 +276,14 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]
     if (post.pillar !== 'product' && post.pillar !== 'founder' && screenSlides > 0)
       problems.push(`slot ${post.slot} uses app screens but is not the product or founder post`);
     if (post.pillar === 'founder' && screenSlides > 1) problems.push(`slot ${post.slot} founder post uses more than 1 screen`);
+    if (!slot.pillars.includes(post.pillar)) problems.push(`slot ${post.slot} (${slot.series}) must use pillar ${slot.pillars.join(' or ')}, not ${post.pillar}`);
+    // Series name and cover kicker: repaired in place, so followers always see the same label per slot.
+    const series = post.pillar === 'product' || post.pillar === 'founder' ? ZENLOT_SERIES[post.pillar] : slot.series;
+    post.series = series;
+    if (post.slides[0]) post.slides[0].kicker = series;
+    const text = `${post.caption}\n${post.slides.map((sl) => [sl.title, sl.body, ...sl.items].join(' ')).join('\n')}`;
+    const crossRef = CROSS_DAY_REF.exec(text);
+    if (crossRef) problems.push(`slot ${post.slot} refers to another post ("${crossRef[0]}"); posts must stand alone`);
     if (!post.caption.includes('not financial advice')) {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
     }
@@ -255,6 +293,12 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]
     post.hashtags = post.hashtags.map((t) => t.replace(/^#/, '').replace(/\s+/g, '')).slice(0, 5);
   }
   for (let i = 0; i < slots.length; i++) if (!seen.has(i)) problems.push(`slot ${i} not filled`);
+  const ctaCounts = new Map<string, number>();
+  for (const p of plan.posts) ctaCounts.set(p.ctaType, (ctaCounts.get(p.ctaType) ?? 0) + 1);
+  for (const [cta, n] of ctaCounts) if (n > 2) problems.push(`${n} posts use the "${cta}" call to action; use each at most twice`);
+  if ((ctaCounts.get('follow') ?? 0) < 2) problems.push(`only ${ctaCounts.get('follow') ?? 0} post(s) ask people to follow; use "follow" on at least 2`);
+  const scenario = plan.posts.some((p) => p.slides.some((sl) => /\bhypothetical\b/i.test(`${sl.kicker} ${sl.title} ${sl.body}`)));
+  if (!scenario) problems.push('no post is a hypothetical scenario labelled "Hypothetical" on a slide; include exactly one');
   const zenlotPosts = plan.posts.filter((p) => p.pillar === 'product' || p.pillar === 'founder').length;
   if (zenlotPosts > 1) problems.push(`${zenlotPosts} product/founder posts; the week must have at most one`);
   return problems;

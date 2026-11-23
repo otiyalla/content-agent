@@ -29,7 +29,7 @@ It is read-only and prints one line per item:
 | Code | It runs from `main`, and `main` has the QA gate (PR #3 merged). |
 | Calendar | Every post due in the next 8 days passes slide QA. Past-due posts are listed, because the first live run marks them missed. Captions that say "as Monday's maths showed" are flagged if Monday's post won't run. |
 | Instagram | The token works and publishing is allowed. |
-| Profile | There is a link in bio (posts say "link in bio"). It has tracking tags. The bio says Zenlot never DMs for money. |
+| Profile | There is a link in bio (posts say "link in bio"), set to `info.zenlot.net/ig` so installs are tracked. The bio says Zenlot never DMs for money. See [PROFILE.md](PROFILE.md). |
 | Insights | Published posts don't show 0 reach in the calendar (the planner learns from these numbers). |
 | Images / Email | R2 hosting and SMTP are configured, so previews, change notices and drafts actually arrive. |
 | Approval | A second person gets the previews. |

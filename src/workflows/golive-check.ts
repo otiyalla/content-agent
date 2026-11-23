@@ -4,6 +4,7 @@ import path from 'path';
 import { env } from '../config/env';
 import { instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
+import { ZENLOT_LINKS } from '../config/zenlot';
 import { isoWeekId, loadCalendar } from '../instagram/calendar';
 import { qaPost } from '../instagram/qa';
 import type { CalendarPost } from '../instagram/types';
@@ -26,6 +27,7 @@ const add = (level: Level, area: string, text: string) => results.push({ level, 
 const MAX_LATENESS_MS = 30 * 3600_000; // keep in step with instagram-publisher.ts
 const DAY_NAMES = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DAY_IDS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const norm = (url: string) => url.replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
 
 /** Manual confirmations recorded by a person in content/go-live.json. */
 interface Confirmations {
@@ -143,13 +145,13 @@ async function checkInstagram(c: Confirmations) {
     add('INFO', 'Instagram', `@${p.username}: ${p.followers_count ?? '?'} followers, ${p.media_count ?? '?'} posts`);
     if (!p.website) {
       add('FAIL', 'Profile', 'No link in bio, but posts tell people "link in bio"');
-    } else if (!/[?&](utm_|ct=|pt=|referrer=)/.test(p.website)) {
-      add('WARN', 'Profile', `Link in bio (${p.website}) has no tracking tags, so installs from Instagram can't be counted (item 3)`);
+    } else if (!/[?&](utm_|ct=|pt=|referrer=)/.test(p.website) && norm(p.website) !== norm(ZENLOT_LINKS.instagramBio)) {
+      add('WARN', 'Profile', `Link in bio is ${p.website}; set it to ${ZENLOT_LINKS.instagramBio} so installs from Instagram are counted (docs/PROFILE.md)`);
     } else {
       add('PASS', 'Profile', `Link in bio is tracked: ${p.website}`);
     }
     if (/never\s+(?:dm|message)/i.test(p.biography ?? '')) add('PASS', 'Profile', 'Bio warns that Zenlot never DMs for money');
-    else add('WARN', 'Profile', 'Bio has no "We never DM you for money" line to protect followers from copycat accounts (item 3)');
+    else add('WARN', 'Profile', 'Bio has no "We never DM you for money" line to protect followers from copycat accounts (docs/PROFILE.md)');
   } catch (err) {
     add('WARN', 'Profile', `Couldn't read the profile: ${err instanceof Error ? err.message : err}`);
   }

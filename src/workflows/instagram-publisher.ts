@@ -6,6 +6,7 @@ import { instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { renderPost } from '../instagram/renderer';
+import { refreshInsights } from '../instagram/insights';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
 import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
@@ -159,6 +160,13 @@ async function main() {
 
     // Dry runs never mutate the calendar.
     if (changed && !env.DRY_RUN) saveCalendar(cal);
+  }
+
+  // Freeze 48h / 7d insight snapshots that are due, so the planner can compare posts at equal ages.
+  try {
+    await refreshInsights(3, { mode: 'snapshots', now });
+  } catch (err) {
+    console.warn(`[Insights] snapshot step failed: ${err instanceof Error ? err.message : err}`);
   }
 
   console.log(`Done: ${published} published, ${failures} failed.`);

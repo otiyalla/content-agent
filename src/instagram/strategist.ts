@@ -109,25 +109,53 @@ export interface PlanningContext {
   notes?: string; // optional steer from a human, e.g. "focus on NFP week"
 }
 
-function performanceSummary(posts: CalendarPost[]): string {
-  const published = posts.filter((p) => p.status === 'published');
-  if (published.length === 0) return 'No published posts yet — this is a fresh account. Optimise for saves and shares.';
+// Below this many posts measured at the same age, rankings are noise.
+const MIN_MEASURED_POSTS = 10;
 
-  const scored = published
+/**
+ * What the planner learns from. Posts are compared only on their 48-hour
+ * snapshot (same age for every post), and posts with zero reach are left out
+ * as unreliable. Until enough posts are measured, the planner is told not to
+ * draw conclusions at all.
+ */
+export function performanceSummary(posts: CalendarPost[]): string {
+  const published = posts.filter((p) => p.status === 'published');
+  if (published.length === 0) return 'No published posts yet — this is a fresh account. Follow the brief and the pillar mix.';
+
+  const at48 = published.filter((p) => p.insightSnapshots?.['48h']);
+  const measured = at48.filter((p) => (p.insightSnapshots!['48h']!.reach ?? 0) > 0);
+  const zeroReach = at48.length - measured.length;
+  const notYet = published.length - at48.length;
+
+  const scored = measured
     .map((p) => {
-      const i = p.insights;
-      const reach = i?.reach ?? 0;
+      const i = p.insightSnapshots!['48h']!;
+      const reach = i.reach ?? 0;
       // Saves and shares are the strongest ranking signals on Instagram.
-      const engagement = (i?.saved ?? 0) * 3 + (i?.shares ?? 0) * 3 + (i?.comments ?? 0) * 2 + (i?.likes ?? 0);
-      return { p, reach, engagement, rate: reach > 0 ? engagement / reach : 0 };
+      const engagement = (i.saved ?? 0) * 3 + (i.shares ?? 0) * 3 + (i.comments ?? 0) * 2 + (i.likes ?? 0);
+      return { p, i, reach, rate: engagement / reach };
     })
     .sort((a, b) => b.rate - a.rate);
 
-  const line = ({ p, reach, rate }: (typeof scored)[number]) =>
-    `- [${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}] "${p.slides[0]?.title}" — reach ${reach}, saves ${p.insights?.saved ?? '?'}, shares ${p.insights?.shares ?? '?'}, weighted engagement rate ${(rate * 100).toFixed(1)}%`;
+  const line = ({ p, i, reach, rate }: (typeof scored)[number]) =>
+    `- [${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}, ${p.id.split('-').pop()}] "${(p.slides[0]?.title ?? '').replace(/\*\*/g, '')}" — at 48h: reach ${reach}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement rate ${(rate * 100).toFixed(1)}%`;
+
+  const counts = [
+    `${published.length} published post(s); ${measured.length} measured at 48 hours`,
+    notYet ? `${notYet} not yet measured (too new, or published before snapshots existed)` : '',
+    zeroReach ? `${zeroReach} left out for zero reach` : '',
+  ].filter(Boolean).join('; ');
+
+  if (measured.length < MIN_MEASURED_POSTS) {
+    return [
+      `NOT ENOUGH DATA YET: ${counts}. About ${MIN_MEASURED_POSTS} posts measured at the same age are needed before comparing.`,
+      'Do not infer what works or doesn\'t from these numbers, and don\'t cite them as evidence in rationales. Follow the brief and the pillar mix, and vary formats so future weeks can be compared.',
+      ...(scored.length ? ['For reference only:', ...scored.map(line)] : []),
+    ].join('\n');
+  }
 
   return [
-    `Published posts with metrics: ${published.length}.`,
+    `${counts}. All numbers below are at 48 hours after publishing, so posts are comparable.`,
     'Best performers:',
     ...scored.slice(0, 3).map(line),
     'Weakest performers:',
@@ -164,7 +192,7 @@ ${ctx.notes ? `\nSteer from the team: ${ctx.notes}\n` : ''}
 # Performance so far
 ${performanceSummary(ctx.recentPosts)}
 
-Lean into what has worked; change approach on what hasn't. Reference this in each post's rationale.
+If there is enough data, lean into what has worked and change approach on what hasn't, and reference it in each post's rationale. If it says there isn't enough data yet, don't draw conclusions from it.
 
 # Already posted recently (do not repeat these angles)
 ${recentTitles}

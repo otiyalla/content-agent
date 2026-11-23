@@ -78,6 +78,8 @@ export type PostStatus =
   | 'failed' // publish attempted and errored; will retry until overdue
   | 'missed'; // never published and now too old to be relevant
 
+export type SnapshotAge = '48h' | '7d';
+
 export interface PostInsights {
   fetchedAt: string;
   reach?: number;
@@ -103,7 +105,13 @@ export interface CalendarPost extends Omit<PlannedPost, 'slot'> {
     publishedAt: string;
     imageUrls: string[];
   };
-  insights?: PostInsights;
+  insights?: PostInsights; // latest numbers (age varies; for display only)
+  /**
+   * Numbers frozen at fixed ages after publishing, so posts can be compared
+   * fairly (see insights.ts). Only taken inside a window after each age; a
+   * post whose window was missed has no snapshot rather than a late one.
+   */
+  insightSnapshots?: Partial<Record<SnapshotAge, PostInsights>>;
 }
 
 export interface WeekCalendar {

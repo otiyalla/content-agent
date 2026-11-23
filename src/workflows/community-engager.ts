@@ -1,5 +1,6 @@
 import { twitterService } from '../services/social/twitter.service';
 import { llmService } from '../services/llm.service';
+import { outbox } from '../services/outbox.service';
 
 // Accounts to monitor and engage with — forex/trading thought leaders and communities
 // Add or remove handles based on who is actively posting in your niche
@@ -68,7 +69,8 @@ async function runCommunityEngager() {
     engagementsPosted++;
   }
 
-  console.log(`\n✅ Community Engager complete. Posted ${engagementsPosted} replies.`);
+  await outbox.flush('X community engager');
+  console.log(`\n✅ Community Engager complete. Drafted ${engagementsPosted} replies.`);
 }
 
 if (require.main === module) {

@@ -6,6 +6,7 @@ name: Zenlot Instagram
 #
 # Safety switch: nothing is posted until the repository variable IG_LIVE is "true"
 # (Settings → Secrets and variables → Actions → Variables). Until then every run is a dry run.
+# Before setting it, run this workflow with job_type "golive-check" and follow docs/GO-LIVE.md.
 
 on:
   schedule:
@@ -18,7 +19,7 @@ on:
         required: true
         default: plan
         type: choice
-        options: [plan, publish, refresh-token]
+        options: [plan, publish, refresh-token, golive-check]
       notes:
         description: 'Optional steer for the planner (e.g. "NFP is Friday, focus on news-day risk")'
         required: false
@@ -106,6 +107,11 @@ jobs:
       - name: Publish due posts
         if: steps.job.outputs.type == 'publish'
         run: npx ts-node src/workflows/instagram-publisher.ts
+
+      # Read-only: everything that must be true before IG_LIVE is set (docs/GO-LIVE.md).
+      - name: Go-live check
+        if: steps.job.outputs.type == 'golive-check'
+        run: npx ts-node src/workflows/golive-check.ts
 
       - name: Upload preview
         if: always() && steps.job.outputs.type == 'plan'

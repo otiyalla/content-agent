@@ -2,6 +2,7 @@ import { twitterService, SocialPost } from '../services/social/twitter.service';
 import { redditService, SUBREDDIT_TIERS } from '../services/social/reddit.service';
 import { llmService } from '../services/llm.service';
 import { emailService } from '../services/email.service';
+import { outbox } from '../services/outbox.service';
 
 // Seed queries — expanded dynamically by Claude each run
 const SEED_QUERIES = [
@@ -182,7 +183,8 @@ ${feature.supportingQuotes.map((q) => `  • "${q}"`).join('\n')}
     }
   }
 
-  console.log(`\n✅ Pain Point Hunter complete. Replied to ${repliesPosted} posts.`);
+  await outbox.flush('pain point hunter');
+  console.log(`\n✅ Pain Point Hunter complete. Drafted ${repliesPosted} replies.`);
 }
 
 if (require.main === module) {

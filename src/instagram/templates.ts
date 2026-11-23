@@ -90,6 +90,18 @@ interface FrameOpts {
   kicker: string;
   /** Content runs off the bottom edge (phone mockups); hides the footer. */
   bleed?: boolean;
+  /** Slide quotes money amounts: label it as an illustrative example. */
+  illustrative?: boolean;
+}
+
+// Money amounts on a slide ("$5,000", "CAD 2,064", "50 USD") are made-up
+// examples, so those slides carry an "Illustrative example" label. Screen
+// slides already say "Example data".
+const CURRENCY_RE = /[$€£]\s?\d|\b(?:USD|CAD|EUR|GBP|AUD|NZD|JPY|CHF)\s?\d|\d\s?(?:USD|CAD|EUR|GBP|AUD|NZD|JPY|CHF)\b/;
+
+export function isIllustrative(slide: Slide): boolean {
+  if (slide.layout === 'screen') return false;
+  return CURRENCY_RE.test([slide.kicker, slide.title, slide.body, slide.stat, ...slide.items].join(' '));
 }
 
 function header({ index, total, kicker }: FrameOpts): El {
@@ -135,10 +147,15 @@ function kickerPill(text: string, color: string = COLORS.teal): El {
   );
 }
 
-function footer({ index, total }: FrameOpts): El {
+function footer({ index, total, illustrative }: FrameOpts): El {
   const isLast = index === total - 1;
-  return div({ justifyContent: 'space-between', alignItems: 'center', width: '100%' }, [
-    h('div', { fontSize: 28, fontWeight: 700, color: COLORS.muted }, HANDLE),
+  return div({ justifyContent: 'space-between', alignItems: 'flex-end', width: '100%' }, [
+    div({ flexDirection: 'column', gap: 6 }, [
+      illustrative
+        ? h('div', { fontSize: 20, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: COLORS.orange }, 'Illustrative example')
+        : '',
+      h('div', { fontSize: 28, fontWeight: 700, color: COLORS.muted }, HANDLE),
+    ]),
     total > 1 && !isLast
       ? div({ alignItems: 'center', gap: 12, fontSize: 28, fontWeight: 700, color: COLORS.teal }, [
           'Swipe',
@@ -373,18 +390,9 @@ function screen(s: Slide): El {
   const BEZEL = 14;
   const screenW = PHONE_W - BEZEL * 2;
   const screenH = Math.round((screenW * 1600) / 738);
-  const exampleLabel = h(
-    'div',
-    { fontSize: 22, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: COLORS.muted },
-    'App screen · Example data',
-  );
   return div({ flexDirection: 'column', gap: 36, width: '100%', height: '100%' }, [
     // Text block never shrinks; the phone takes whatever height is left and bleeds off the edge.
-    div({ flexDirection: 'column', gap: 24, flexShrink: 0 }, [
-      div({ alignItems: 'center', gap: 24 }, [s.kicker ? kickerPill(s.kicker) : '', exampleLabel]),
-      title(s.title, { fontSize: Math.min(fit(s.title, TITLE_SIZES), 68) }),
-      s.body ? body(s.body, { fontSize: 32 }) : '',
-    ]),
+    screenText(s),
     div({ flexGrow: 1, justifyContent: 'center', alignItems: 'flex-start', width: '100%' }, [
       div(
         {
@@ -405,6 +413,19 @@ function screen(s: Slide): El {
   ]);
 }
 
+function screenText(s: Slide): El {
+  const exampleLabel = h(
+    'div',
+    { fontSize: 22, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase', color: COLORS.muted },
+    'App screen · Example data',
+  );
+  return div({ flexDirection: 'column', gap: 24, flexShrink: 0 }, [
+    div({ alignItems: 'center', gap: 24 }, [s.kicker ? kickerPill(s.kicker) : '', exampleLabel]),
+    title(s.title, { fontSize: Math.min(fit(s.title, TITLE_SIZES), 68) }),
+    s.body ? body(s.body, { fontSize: 32 }) : '',
+  ]);
+}
+
 const LAYOUTS: Record<Slide['layout'], (s: Slide) => El> = {
   cover,
   point,
@@ -422,5 +443,30 @@ export function slideElement(slide: Slide, index: number, total: number): El {
   // Single images show the kicker in the header pill — but only for layouts
   // that don't already draw it in the body. Carousels show the slide counter.
   const kicker = total === 1 && slide.layout === 'quote' ? slide.kicker : '';
-  return frame({ index, total, kicker, bleed: slide.layout === 'screen' }, content);
+  return frame({ index, total, kicker, bleed: slide.layout === 'screen', illustrative: isIllustrative(slide) }, content);
 }
+
+/**
+ * The pieces of a slide the layout check measures: the header and footer as
+ * drawn, and the content block (for screen slides, only the text above the
+ * phone, since the phone is meant to run off the bottom edge).
+ */
+export function slideParts(slide: Slide, index: number, total: number) {
+  const kicker = total === 1 && slide.layout === 'quote' ? slide.kicker : '';
+  const opts: FrameOpts = { index, total, kicker, bleed: slide.layout === 'screen', illustrative: isIllustrative(slide) };
+  return {
+    header: header(opts),
+    footer: opts.bleed ? null : footer(opts),
+    content: slide.layout === 'screen' ? screenText(slide) : LAYOUTS[slide.layout](slide),
+    bleed: Boolean(opts.bleed),
+  };
+}
+
+/** Frame geometry the layout check needs (kept next to frame() so they change together). */
+export const FRAME = {
+  padTop: 72,
+  padBottom: 64,
+  padX: 80,
+  contentPadY: 40, // top and bottom padding around centred content
+  bleedGap: 44, // space between header and content on screen slides
+} as const;

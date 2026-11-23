@@ -3,6 +3,7 @@ import { Resvg } from '@resvg/resvg-js';
 import jpeg from 'jpeg-js';
 import { CANVAS, loadFonts } from './brand';
 import { slideElement } from './templates';
+import { normalizeSlide } from './qa';
 import type { Slide } from './types';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,8 @@ import type { Slide } from './types';
 const JPEG_QUALITY = 92;
 
 export async function renderSlide(slide: Slide, index: number, total: number): Promise<Buffer> {
-  const svg = await satori(slideElement(slide, index, total) as unknown as Parameters<typeof satori>[0], {
+  // Swap symbols the font can't draw (e.g. "⁵", "≈") for plain text so they never render as boxes.
+  const svg = await satori(slideElement(normalizeSlide(slide), index, total) as unknown as Parameters<typeof satori>[0], {
     width: CANVAS.width,
     height: CANVAS.height,
     fonts: loadFonts(),

@@ -1,6 +1,7 @@
 import Snoowrap from 'snoowrap';
 import { env } from '../../config/env';
 import { SocialPost } from './twitter.service';
+import { outbox } from '../outbox.service';
 
 // ---------------------------------------------------------------------------
 // Subreddit tiers — Reddit Community Builder strategy
@@ -222,27 +223,8 @@ export class RedditService {
   // Community actions
   // -------------------------------------------------------------------------
 
-  /**
-   * Upvotes a post or comment as a community support action.
-   * Reddit Community Builder 90/10 rule: upvoting valuable content is part of
-   * authentic participation — not just posting replies.
-   */
-  async upvotePost(postId: string): Promise<boolean> {
-    if (!this.client || env.DRY_RUN) {
-      console.log(`[DRY RUN - Reddit] Upvote ${postId}`);
-      return true;
-    }
-
-    try {
-      const submission = this.client.getSubmission(postId);
-      // @ts-ignore – Snoowrap recursive Promise
-      await submission.upvote();
-      return true;
-    } catch (error) {
-      console.error(`Error upvoting ${postId}:`, error);
-      return false;
-    }
-  }
+  // No voting methods on purpose: automated votes break Reddit's rules on vote
+  // manipulation and can get the account banned.
 
   /**
    * Replies to a Reddit submission or comment.
@@ -250,6 +232,14 @@ export class RedditService {
    * The LLM prompt for Reddit replies handles this — never strip it out here.
    */
   async replyToPost(postId: string, content: string): Promise<string | null> {
+    const allowed = outbox.allow({
+      platform: 'reddit',
+      action: `reply to post ${postId}`,
+      text: content,
+      link: `https://www.reddit.com/comments/${postId}`,
+    });
+    if (!allowed) return null;
+
     if (!this.client || env.DRY_RUN) {
       console.log(`[DRY RUN - Reddit] Reply to ${postId}:\n${content}\n`);
       return 'mock-comment-id';
@@ -271,6 +261,8 @@ export class RedditService {
    * Replies to a specific comment (not a top-level submission).
    */
   async replyToComment(commentId: string, content: string): Promise<string | null> {
+    if (!outbox.allow({ platform: 'reddit', action: `reply to comment ${commentId}`, text: content })) return null;
+
     if (!this.client || env.DRY_RUN) {
       console.log(`[DRY RUN - Reddit] Reply to comment ${commentId}:\n${content}\n`);
       return 'mock-comment-reply-id';
@@ -297,6 +289,15 @@ export class RedditService {
     title: string,
     content: string,
   ): Promise<string | null> {
+    const allowed = outbox.allow({
+      platform: 'reddit',
+      action: `new post in r/${subreddit}`,
+      title,
+      text: content,
+      link: `https://www.reddit.com/r/${subreddit}/submit`,
+    });
+    if (!allowed) return null;
+
     if (!this.client || env.DRY_RUN) {
       console.log(
         `[DRY RUN - Reddit] New post in r/${subreddit}\nTitle: "${title}"\n\n${content}\n`,

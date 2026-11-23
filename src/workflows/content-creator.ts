@@ -1,6 +1,7 @@
 import { researchService } from '../services/research.service';
 import { llmService, ContentType } from '../services/llm.service';
 import { twitterService } from '../services/social/twitter.service';
+import { outbox } from '../services/outbox.service';
 
 // Content mix strategy from Twitter Engager:
 // Educational 25% | Personal 20% | Commentary 20% | Engagement 15% | Promotional 10% | Entertainment 10%
@@ -52,9 +53,9 @@ const CONTENT_CALENDAR: { type: ContentType; weight: number; topics: string[] }[
     type: 'promotional',
     weight: 10,
     topics: [
-      'Zenlot forces you to define your risk before you enter — here is why that changes everything',
-      'The one feature in Zenlot that traders say they wish they had on day one',
-      'How Zenlot\'s trade journal surfaces patterns you cannot see in the moment',
+      'Zenlot asks for your stop-loss and risk before you confirm a trade. Here is why that one step matters',
+      'Seeing roughly what you could gain or lose before you enter: the Zenlot feature the founder uses most',
+      'A winning trade can still get a "Lucky" verdict in Zenlot. Why judging the process beats judging the outcome',
     ],
   },
   {
@@ -135,6 +136,7 @@ async function runCreator() {
 
   console.log('Publishing to Twitter...');
   await twitterService.postTweet(generated.content);
+  await outbox.flush('X content creator');
 
   console.log(`✅ Content Creator Workflow complete. [${type}]`);
 }

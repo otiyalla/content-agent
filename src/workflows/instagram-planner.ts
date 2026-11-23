@@ -13,6 +13,9 @@ import {
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
 import { renderPost } from '../instagram/renderer';
+import { qaPost } from '../instagram/qa';
+import { markPreviewed } from '../instagram/approval';
+import { editLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
 import { planWeek } from '../instagram/strategist';
 import type { CalendarPost, WeekCalendar } from '../instagram/types';
 
@@ -47,15 +50,6 @@ function mondayFromWeekId(week: string): Date {
 }
 
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
-
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-function editLink(week: string): string | null {
-  const server = process.env.GITHUB_SERVER_URL;
-  const repo = process.env.GITHUB_REPOSITORY;
-  if (!server || !repo) return null;
-  return `${server}/${repo}/edit/${process.env.GITHUB_REF_NAME || 'main'}/content/instagram/calendar/${week}.json`;
-}
 
 function reportHtml(posts: CalendarPost[]): string {
   const published = posts.filter((p) => p.status === 'published');
@@ -120,31 +114,19 @@ async function main() {
         return { id: `${week}-${s.day}`, scheduledAt: slotTime(weekMonday, s).toISOString(), status: 'scheduled' as const, ...post };
       }),
   };
+  // Fingerprint what the email below shows, so the publisher can tell if it changes afterwards.
+  for (const post of calendar.posts) markPreviewed(post);
   const file = saveCalendar(calendar);
   console.log(`💾 Saved ${path.relative(process.cwd(), file)} — theme: "${calendar.theme}"`);
 
   // 4. Render + email preview
   console.log('🎨 Rendering preview...');
-  const attachments: Array<{ filename: string; content: Buffer; cid: string }> = [];
+  const attachments: Attachment[] = [];
   const sections: string[] = [];
   for (const post of calendar.posts) {
     const images = await renderPost(post.slides);
-    const imgs = images
-      .map((content, i) => {
-        const cid = `${post.id}-${i + 1}`;
-        attachments.push({ filename: `${cid}.jpg`, content, cid });
-        return `<img src="cid:${cid}" width="180" style="border-radius:8px;margin:0 6px 6px 0" alt="slide ${i + 1}">`;
-      })
-      .join('');
-    const when = new Date(post.scheduledAt).toUTCString().replace(':00 GMT', ' UTC');
-    sections.push(`<div style="margin:28px 0;padding-top:16px;border-top:1px solid #e5e7eb">
-<h3 style="margin:0 0 4px">${when} — ${esc(post.topic)}</h3>
-<div style="color:#667;font-size:13px;margin-bottom:10px">${post.pillar} · ${post.slides.length > 1 ? `carousel, ${post.slides.length} slides` : post.slides[0].layout} · id <code>${post.id}</code></div>
-<div>${imgs}</div>
-<pre style="white-space:pre-wrap;font-family:inherit;background:#f8fafc;padding:12px;border-radius:8px;font-size:14px">${esc(post.caption)}
-
-${post.hashtags.map((t) => `#${t}`).join(' ')}</pre>
-<div style="color:#667;font-size:12px"><b>Why:</b> ${esc(post.rationale)}</div></div>`);
+    const qa = await qaPost(post);
+    sections.push(postSectionHtml(post, images, attachments, qa.blocking));
   }
 
   const edit = editLink(week);
@@ -154,7 +136,8 @@ ${post.hashtags.map((t) => `#${t}`).join(' ')}</pre>
 <p style="background:#fff7ed;border:1px solid #fed7aa;padding:10px 12px;border-radius:8px;font-size:14px">
 These posts publish automatically at the times shown. To stop one, set its <code>"status"</code> to <code>"skipped"</code>
 ${edit ? `in <a href="${edit}">the calendar file</a>` : `in <code>content/instagram/calendar/${week}.json</code>`}.
-You can also edit any slide text or caption there — images are re-rendered when the post goes out.</p>
+You can also edit any slide text or caption there. If a post changes after this email, you'll get a new preview of it
+and it waits 3 hours before publishing.</p>
 ${sections.join('\n')}
 <h2 style="margin-top:40px">Last week's performance</h2>
 ${reportHtml(lastWeek)}

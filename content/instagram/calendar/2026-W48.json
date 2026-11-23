@@ -74,7 +74,9 @@
         "tradingmath"
       ],
       "altText": "Dark slide with the headline: A 50% loss needs a 100% gain to recover. Subtitle: The maths that decides who's still trading next year.",
-      "rationale": "Fresh account with no performance data, so we open the week with the highest-save format for numerate education: a stepped stat carousel with a painful, verifiable truth in the hook. Every figure is derived from 1/(1−loss)−1 or compounding (0.99^10, 0.95^10), so it builds credibility from post one. It also sets up the theme the rest of the week references. This is our baseline for carousel saves."
+      "rationale": "Fresh account with no performance data, so we open the week with the highest-save format for numerate education: a stepped stat carousel with a painful, verifiable truth in the hook. Every figure is derived from 1/(1−loss)−1 or compounding (0.99^10, 0.95^10), so it builds credibility from post one. It also sets up the theme the rest of the week references. This is our baseline for carousel saves.",
+      "previewHash": "0ad233b6010c6e71",
+      "previewedAt": "2026-11-19T00:31:14.142Z"
     },
     {
       "id": "2026-W48-tue",
@@ -109,7 +111,9 @@
         "forexeducation"
       ],
       "altText": "Checklist titled 6 checks before any entry: stop-loss level decided, risk capped at your set percent, lot size calculated not guessed, reward-to-risk written down, reason for the trade in one line, daily loss limit not yet hit.",
-      "rationale": "Checklists are the most saveable single-image format, and the account has no data yet, so this tests whether practical, reusable tools out-save Monday's maths. It converts Monday's insight (keep drawdowns shallow) into action, reinforcing the theme. Its plain list layout also varies the grid between two carousels."
+      "rationale": "Checklists are the most saveable single-image format, and the account has no data yet, so this tests whether practical, reusable tools out-save Monday's maths. It converts Monday's insight (keep drawdowns shallow) into action, reinforcing the theme. Its plain list layout also varies the grid between two carousels.",
+      "previewHash": "974aba00fbad25a8",
+      "previewedAt": "2026-11-19T00:31:14.142Z"
     },
     {
       "id": "2026-W48-wed",
@@ -196,7 +200,9 @@
         "forexeducation"
       ],
       "altText": "Slide with the headline: Your strategy isn't broken. Five losses are normal. Subtitle: What a losing streak actually means, in numbers.",
-      "rationale": "No historical data yet, so this deliberately tests the psychology pillar with a reassuring, contrarian hook aimed at our core pain point (traders who blew accounts by revenge trading). It's highly shareable because readers send it to friends mid-drawdown. It links Monday's drawdown maths to behaviour, and all probabilities are shown (0.6^5, 0.99^5)."
+      "rationale": "No historical data yet, so this deliberately tests the psychology pillar with a reassuring, contrarian hook aimed at our core pain point (traders who blew accounts by revenge trading). It's highly shareable because readers send it to friends mid-drawdown. It links Monday's drawdown maths to behaviour, and all probabilities are shown (0.6^5, 0.99^5).",
+      "previewHash": "5fa6de4287014190",
+      "previewedAt": "2026-11-19T00:31:14.142Z"
     },
     {
       "id": "2026-W48-thu",
@@ -224,7 +230,9 @@
         "forexeducation"
       ],
       "altText": "Myth versus fact slide. Myth: A high win rate means a profitable strategy. Fact: Win 70% at plus 0.5R and lose 30% at minus 1.5R and expectancy is minus 0.1R per trade.",
-      "rationale": "Myth-vs-fact singles are shareable because they challenge a belief many beginners hold. With a fresh account, this also tests a contrarian single against Tuesday's checklist. It builds on Wednesday's expectancy maths from the opposite direction (a low win rate can win, a high one can lose), using fully shown arithmetic. It also adds a third single-image layout to the grid."
+      "rationale": "Myth-vs-fact singles are shareable because they challenge a belief many beginners hold. With a fresh account, this also tests a contrarian single against Tuesday's checklist. It builds on Wednesday's expectancy maths from the opposite direction (a low win rate can win, a high one can lose), using fully shown arithmetic. It also adds a third single-image layout to the grid.",
+      "previewHash": "39f30caaa21e5ae5",
+      "previewedAt": "2026-11-19T00:31:14.142Z"
     },
     {
       "id": "2026-W48-sat",
@@ -273,7 +281,7 @@
           "layout": "screen",
           "kicker": "In Zenlot",
           "title": "Set your risk **once**",
-          "body": "Your limits size every position and check every trade.",
+          "body": "Example account: CAD 2,064 at **2%** risk. Your limits size every position.",
           "stat": "",
           "items": [],
           "screen": "risk-profile"
@@ -297,7 +305,9 @@
         "tradingtools"
       ],
       "altText": "Slide with the headline: Same lot size every trade? Your risk isn't fixed. Subtitle: Why I always trade 0.5 lots isn't a risk plan.",
-      "rationale": "This is the week's only Zenlot mention, scheduled last so four value-first posts build trust before it. It leads with a concrete problem and a worked formula that's worth saving even without the app. All figures check out (0.2 lots × $10 × 25 pips = $50; 0.5 × $10 × 60 = $300 = 6%). With no baseline yet, comparing its saves to Monday's carousel will show whether product posts can perform when they lead with education."
+      "rationale": "This is the week's only Zenlot mention, scheduled last so four value-first posts build trust before it. It leads with a concrete problem and a worked formula that's worth saving even without the app. All figures check out (0.2 lots × $10 × 25 pips = $50; 0.5 × $10 × 60 = $300 = 6%). With no baseline yet, comparing its saves to Monday's carousel will show whether product posts can perform when they lead with education.",
+      "previewHash": "9418ec2d1e1ceab2",
+      "previewedAt": "2026-11-19T00:31:14.142Z"
     }
   ]
 }

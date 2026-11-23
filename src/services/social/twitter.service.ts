@@ -1,5 +1,6 @@
 import { TwitterApi, TwitterApiReadOnly } from 'twitter-api-v2';
 import { env } from '../../config/env';
+import { outbox } from '../outbox.service';
 
 export interface SocialPost {
   id: string;
@@ -181,6 +182,15 @@ export class TwitterService {
    * Posts a new tweet or replies to an existing one.
    */
   async postTweet(content: string, replyToTweetId?: string): Promise<string | null> {
+    // Approval gate + brand check: held drafts are emailed instead of posted.
+    const allowed = outbox.allow({
+      platform: 'x',
+      action: replyToTweetId ? `reply to tweet ${replyToTweetId}` : 'new tweet',
+      text: content,
+      link: replyToTweetId ? `https://x.com/i/web/status/${replyToTweetId}` : undefined,
+    });
+    if (!allowed) return null;
+
     const tweets = this.splitIntoTweets(content);
 
     if (!this.client || env.DRY_RUN) {

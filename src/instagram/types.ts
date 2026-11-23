@@ -94,6 +94,9 @@ export interface CalendarPost extends Omit<PlannedPost, 'slot'> {
   status: PostStatus;
   attempts?: number;
   lastError?: string;
+  /** Fingerprint of the content as last previewed by email (see approval.ts). */
+  previewHash?: string;
+  previewedAt?: string;
   published?: {
     mediaId: string;
     permalink?: string;

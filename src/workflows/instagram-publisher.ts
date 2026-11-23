@@ -4,6 +4,7 @@ import { instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { renderPost } from '../instagram/renderer';
+import { qaPost } from '../instagram/qa';
 import type { CalendarPost } from '../instagram/types';
 
 // ---------------------------------------------------------------------------
@@ -28,6 +29,11 @@ function hashtagsBlock(post: CalendarPost): string {
 }
 
 async function publishPost(week: string, post: CalendarPost): Promise<void> {
+  // Re-check at publish time: the calendar may have been hand-edited after the Sunday review.
+  const qa = qaPost(post);
+  if (qa.fixes.length) console.log(`  QA swapped symbols: ${qa.fixes.join('; ')}`);
+  if (qa.blocking.length) throw new Error(`Slide QA blocked publishing: ${qa.blocking.join('; ')}`);
+
   const images = await renderPost(post.slides);
   const caption = `${post.caption.trim()}${hashtagsBlock(post)}`;
 

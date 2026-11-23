@@ -2,6 +2,8 @@ name: Zenlot Content Agent
 
 # Safety switch: these agents run in dry-run mode (no posts, replies or emails) until the
 # repository variable AGENTS_LIVE is "true". Instagram has its own switch (IG_LIVE).
+# Even when live, X/Reddit posts and replies are emailed as drafts for approval unless
+# AGENTS_AUTOPOST is also "true". Drafts that fail the brand check are never auto-posted.
 
 on:
   schedule:
@@ -76,6 +78,7 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
+          AGENTS_AUTOPOST: ${{ vars.AGENTS_AUTOPOST }}
         run: npm run run:hunter
 
       - name: Run Content Creator
@@ -91,7 +94,14 @@ jobs:
           TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
           DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
+          AGENTS_AUTOPOST: ${{ vars.AGENTS_AUTOPOST }}
         run: npm run run:creator
 
       - name: Run Community Engager
@@ -106,7 +116,14 @@ jobs:
           TWITTER_APP_SECRET: ${{ secrets.TWITTER_APP_SECRET }}
           TWITTER_ACCESS_TOKEN: ${{ secrets.TWITTER_ACCESS_TOKEN }}
           TWITTER_ACCESS_SECRET: ${{ secrets.TWITTER_ACCESS_SECRET }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
           DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
+          AGENTS_AUTOPOST: ${{ vars.AGENTS_AUTOPOST }}
         run: npm run run:engager
 
       - name: Run Reddit Community
@@ -129,4 +146,5 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
+          AGENTS_AUTOPOST: ${{ vars.AGENTS_AUTOPOST }}
         run: npm run run:reddit

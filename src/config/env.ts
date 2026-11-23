@@ -53,6 +53,8 @@ const envSchema = z.object({
   R2_PUBLIC_BASE_URL: z.string().optional(), // e.g. https://social.zenlot.net or https://pub-xxxx.r2.dev
 
   DRY_RUN: z.string().default('true').transform((val) => val === 'true'),
+  // X/Reddit only: post without owner approval. Off by default, so drafts are emailed for review.
+  AGENTS_AUTOPOST: z.string().default('false').transform((val) => val === 'true'),
 });
 
 // Validate process.env against schema

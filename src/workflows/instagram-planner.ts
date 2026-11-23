@@ -13,6 +13,7 @@ import {
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
 import { renderPost } from '../instagram/renderer';
+import { qaPost } from '../instagram/qa';
 import { planWeek } from '../instagram/strategist';
 import type { CalendarPost, WeekCalendar } from '../instagram/types';
 
@@ -137,8 +138,12 @@ async function main() {
       })
       .join('');
     const when = new Date(post.scheduledAt).toUTCString().replace(':00 GMT', ' UTC');
+    const qa = qaPost(post);
+    const qaHtml = qa.blocking.length
+      ? `<div style="background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px"><b>Won't publish until fixed:</b> ${qa.blocking.map(esc).join('; ')}</div>`
+      : '';
     sections.push(`<div style="margin:28px 0;padding-top:16px;border-top:1px solid #e5e7eb">
-<h3 style="margin:0 0 4px">${when} — ${esc(post.topic)}</h3>
+<h3 style="margin:0 0 4px">${when} — ${esc(post.topic)}</h3>${qaHtml}
 <div style="color:#667;font-size:13px;margin-bottom:10px">${post.pillar} · ${post.slides.length > 1 ? `carousel, ${post.slides.length} slides` : post.slides[0].layout} · id <code>${post.id}</code></div>
 <div>${imgs}</div>
 <pre style="white-space:pre-wrap;font-family:inherit;background:#f8fafc;padding:12px;border-radius:8px;font-size:14px">${esc(post.caption)}

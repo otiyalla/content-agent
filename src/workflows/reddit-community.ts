@@ -1,5 +1,6 @@
 import { redditService, SUBREDDIT_TIERS } from '../services/social/reddit.service';
 import { llmService } from '../services/llm.service';
+import { outbox } from '../services/outbox.service';
 
 // ---------------------------------------------------------------------------
 // Reddit Community Builder workflow
@@ -24,7 +25,7 @@ const MAX_ENGAGEMENTS_PER_RUN = 3;
 // Reddit Community Builder: educational series builds karma and trust over time
 const EDUCATIONAL_TOPICS = [
   'Why your stop-loss placement is costing you more than your losses',
-  'The position sizing formula that changed how I manage risk',
+  'Position sizing from first principles: the formula, worked through step by step',
   'How to journal trades so you actually learn from them',
   'Revenge trading: the psychological loop and how to break it',
   'Risk-to-reward ratio is not what most traders think it is',
@@ -98,10 +99,6 @@ async function runRedditCommunity() {
     console.log(`  Reply preview: "${reply.substring(0, 120)}..."`);
 
     await redditService.replyToPost(post.id, reply);
-
-    // 90/10 rule: upvote other high-quality posts in the thread as a community act
-    await redditService.upvotePost(post.id);
-
     engagementsPosted++;
   }
 
@@ -155,6 +152,7 @@ async function runRedditCommunity() {
     console.log('  (karma check skipped — mock mode)');
   }
 
+  await outbox.flush('Reddit community');
   console.log('\n✅ Reddit Community Workflow complete.');
 }
 

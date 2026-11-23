@@ -266,12 +266,12 @@ ${communityContext ? `Community context: ${communityContext}` : ''}
 Topic: "${topic}"
 
 Write a Reddit educational post. Rules:
-- Title: compelling, specific, native to Reddit. Under 300 chars. (e.g. "How I stopped revenge trading: the rule that actually worked" — not "5 Tips To Improve Your Trading").
+- Title: compelling, specific, native to Reddit. Under 300 chars. (e.g. "Revenge trading has a pattern: the rule that breaks it" — not "5 Tips To Improve Your Trading").
 - Body: 300-600 words. Use Reddit markdown: **bold** for key terms, ## headers sparingly, bullets only when genuinely list-like.
 - 100% value. Zero promotion. Zero mention of Zenlot.
-- Include a specific personal insight that proves expertise — not generic advice.
+- Prove expertise with a worked example (clearly labelled as hypothetical) or the maths, not with personal claims.
+  Never invent personal trading history: no years of experience, account sizes, blown accounts, past trades or results.
 - End with a question that invites community discussion.
-- Optional final line: "> I trade for X years and built tools to help with this — happy to answer questions."
 
 Return JSON:
 {

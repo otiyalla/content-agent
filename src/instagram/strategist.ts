@@ -5,6 +5,7 @@ import { env } from '../config/env';
 import { backupSteps, runChain } from '../services/llm-providers';
 import { ZENLOT_PRODUCT } from '../config/zenlot';
 import { screensForPrompt } from './screens';
+import { qaPost } from './qa';
 import { WeekPlanSchema, type WeekPlan, type CalendarPost } from './types';
 import type { Slot } from './calendar';
 
@@ -78,6 +79,8 @@ Screen rules:
 - Don't use the same screen twice in a week. Only product and founder posts may use screen slides.
 
 Text highlighting: wrap 1-3 key words in **double asterisks** inside title/body to render them in the brand accent colour.
+Slide characters: the slide font only has basic Latin letters, digits and common punctuation. Write maths in plain
+text ("0.6^5 = 7.8%", "about 1 in 13", "x", "/", "~"). No superscripts, ≈, arrows, ticks or emoji on slides.
 Use it on most slides, sparingly.
 
 Carousel structure that performs:
@@ -193,6 +196,8 @@ export function checkPlan(plan: WeekPlan, slots: Slot[]): string[] {
     if (!post.caption.includes('not financial advice')) {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
     }
+    // Swap unsupported maths symbols in place; anything still unrenderable or off-brand goes back to the model.
+    for (const issue of qaPost(post, { fix: true }).blocking) problems.push(`slot ${post.slot} ${issue}`);
     post.hashtags = post.hashtags.map((t) => t.replace(/^#/, '').replace(/\s+/g, '')).slice(0, 5);
   }
   for (let i = 0; i < slots.length; i++) if (!seen.has(i)) problems.push(`slot ${i} not filled`);

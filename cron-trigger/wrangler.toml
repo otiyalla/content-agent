@@ -1,0 +1,17 @@
+name = "zenlot-cron-trigger"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = false # no public URL
+
+[vars]
+GITHUB_REPO = "otiyalla/content-agent"
+WORKFLOW_FILE = "instagram.yml"
+
+# UTC. Must match CRONS in src/index.ts and .github/workflows/instagram.yml.
+[triggers]
+crons = ["7 13,14,18 * * *", "37 13-16,19,22 * * *", "0 16 * * SUN"]
+
+[observability]
+enabled = true
+
+# Secret (not in this file): GITHUB_TOKEN — set with `npx wrangler secret put GITHUB_TOKEN`.

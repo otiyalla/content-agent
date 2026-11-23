@@ -3,6 +3,7 @@ name: Zenlot Instagram
 # Sunday 16:00 UTC  → refresh token, pull insights, plan next week, email preview
 # Daily 13:07/14:07 → publish posts that are due (slots are 13:00 Mon–Thu, 14:00 Sat)
 # Daily 18:07       → retry anything that failed earlier in the day
+# Daily :37 at 13–16, 19, 22 UTC → comment digest (~30 min, 2 h, 6 h after posts); emails only, posts nothing
 #
 # Safety switch: nothing is posted until the repository variable IG_LIVE is "true"
 # (Settings → Secrets and variables → Actions → Variables). Until then every run is a dry run.
@@ -12,6 +13,7 @@ on:
   schedule:
     - cron: '0 16 * * 0'
     - cron: '7 13,14,18 * * *'
+    - cron: '37 13-16,19,22 * * *'
   workflow_dispatch:
     inputs:
       job_type:
@@ -19,7 +21,7 @@ on:
         required: true
         default: plan
         type: choice
-        options: [plan, publish, refresh-token, golive-check]
+        options: [plan, publish, comments, refresh-token, golive-check]
       notes:
         description: 'Optional steer for the planner (e.g. "NFP is Friday, focus on news-day risk")'
         required: false
@@ -78,6 +80,8 @@ jobs:
             echo "type=${{ github.event.inputs.job_type }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.event.schedule }}" = "0 16 * * 0" ]; then
             echo "type=plan" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "37 13-16,19,22 * * *" ]; then
+            echo "type=comments" >> "$GITHUB_OUTPUT"
           else
             echo "type=publish" >> "$GITHUB_OUTPUT"
           fi
@@ -107,6 +111,14 @@ jobs:
       - name: Publish due posts
         if: steps.job.outputs.type == 'publish'
         run: npx ts-node src/workflows/instagram-publisher.ts
+
+      # Reads comments and emails a digest with drafted replies. Never posts, hides or deletes, so it
+      # sends real email even while IG_LIVE is off (the account already has live posts). docs/COMMUNITY.md
+      - name: Comment digest
+        if: steps.job.outputs.type == 'comments'
+        env:
+          DRY_RUN: 'false'
+        run: npx ts-node src/workflows/instagram-comments.ts
 
       # Read-only: everything that must be true before IG_LIVE is set (docs/GO-LIVE.md).
       - name: Go-live check

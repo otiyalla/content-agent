@@ -65,6 +65,8 @@ To stop everything, delete the variable or set it to anything other than `true`.
 
 ## Editing a post after the Sunday preview
 
-The preview email fingerprints each post. If you edit its slides, caption, hashtags or alt text after that,
-the publisher emails you a fresh preview of exactly what will go out and waits 3 hours before publishing.
+The preview email fingerprints each post: its text, and how its slides look. If you edit its slides, caption,
+hashtags or alt text after that, or a template, font or app screenshot change alters how it renders, the publisher
+emails you a fresh preview of exactly what will go out and waits 3 hours before publishing. After editing a post,
+run `npm run ig:repreview` to send its preview straight away, so the 3 hours start now.
 To stop a post, set its `"status"` to `"skipped"`.

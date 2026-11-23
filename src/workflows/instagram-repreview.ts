@@ -1,5 +1,6 @@
 import { env } from '../config/env';
-import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
+import { CHANGE_HOLD_MS, markPreviewed, previewMismatch } from '../instagram/approval';
+import { renderHash } from '../instagram/renderer';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { sendChangePreview } from '../instagram/preview';
 
@@ -22,11 +23,13 @@ async function main() {
     let changed = false;
     for (const post of cal.posts) {
       if (post.status !== 'scheduled' && post.status !== 'failed') continue;
-      if (post.previewHash === contentHash(post)) continue;
+      const fingerprint = await renderHash(post.slides);
+      const mismatch = previewMismatch(post, fingerprint);
+      if (!mismatch) continue;
       const after = new Date(Math.max(Date.parse(post.scheduledAt), now.getTime() + CHANGE_HOLD_MS));
-      console.log(`✉️  ${post.id} changed since its last preview — sending it now (publishes ${after.toISOString()})`);
+      console.log(`✉️  ${post.id}: ${mismatch} — sending a preview now (publishes ${after.toISOString()})`);
       try {
-        await sendChangePreview(week, post, after);
+        await sendChangePreview(week, post, after, mismatch);
       } catch (err) {
         console.error(`  ❌ ${err instanceof Error ? err.message : err}. Not marked as previewed; run again.`);
         process.exitCode = 1;
@@ -34,7 +37,7 @@ async function main() {
       }
       sent++;
       if (!env.DRY_RUN) {
-        markPreviewed(post, now);
+        markPreviewed(post, fingerprint, now);
         changed = true;
       }
     }

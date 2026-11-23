@@ -48,7 +48,7 @@ export function editLink(week: string): string | null {
 }
 
 /** Emails a preview of a post that changed after the last preview. Throws if the email couldn't be sent. */
-export async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date): Promise<void> {
+export async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date, reason = 'it changed since the last preview'): Promise<void> {
   const images = await renderPost(post.slides);
   const qa = await qaPost(post);
   const attachments: Attachment[] = [];
@@ -58,7 +58,7 @@ export async function sendChangePreview(week: string, post: CalendarPost, publis
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
 <h2 style="margin-bottom:4px">A scheduled Instagram post changed</h2>
 <p style="background:#fff7ed;border:1px solid #fed7aa;padding:10px 12px;border-radius:8px;font-size:14px">
-<code>${esc(post.id)}</code> is different from the version you last saw. This is exactly what will be published,
+<code>${esc(post.id)}</code> needs a fresh look: ${esc(reason)}. This is exactly what will be published,
 at its scheduled time or the first run after <b>${esc(after)}</b>, whichever is later. To stop it, set its <code>"status"</code> to <code>"skipped"</code>
 ${edit ? `in <a href="${edit}">the calendar file</a>` : `in <code>content/instagram/calendar/${week}.json</code>`}.</p>
 ${section}</div>`;

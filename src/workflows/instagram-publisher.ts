@@ -3,12 +3,12 @@ import { env } from '../config/env';
 import { instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
-import { renderPost } from '../instagram/renderer';
+import { renderHash, renderPost } from '../instagram/renderer';
 import { refreshInsights } from '../instagram/insights';
 import { recordAccountDay } from '../instagram/account';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
-import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
+import { CHANGE_HOLD_MS, markPreviewed, previewMismatch } from '../instagram/approval';
 import { sendChangePreview } from '../instagram/preview';
 import { renderReshareStory } from '../instagram/reshare-story';
 import type { CalendarPost } from '../instagram/types';
@@ -131,12 +131,15 @@ async function main() {
         continue;
       }
 
-      // What you reviewed is what ships: a post edited since its preview gets a new preview and a hold.
-      if (post.previewHash && post.previewHash !== contentHash(post)) {
+      // What you reviewed is what ships: if the text or the rendered slides changed since the preview,
+      // email a new preview and hold the post.
+      const fingerprint = await renderHash(post.slides);
+      const mismatch = previewMismatch(post, fingerprint);
+      if (mismatch) {
         const after = new Date(now.getTime() + CHANGE_HOLD_MS);
-        console.log(`✋ ${post.id} changed since it was previewed — emailing a new preview; it publishes after ${after.toISOString()}`);
+        console.log(`✋ ${post.id}: ${mismatch} — emailing a new preview; it publishes after ${after.toISOString()}`);
         try {
-          await sendChangePreview(week, post, after);
+          await sendChangePreview(week, post, after, mismatch);
         } catch (err) {
           // Keep holding: a changed post never publishes until its preview has actually been sent.
           console.error(`  ❌ ${err instanceof Error ? err.message : err}; ${post.id} stays on hold and is retried next run`);
@@ -144,7 +147,7 @@ async function main() {
           continue;
         }
         if (!env.DRY_RUN) {
-          markPreviewed(post, now);
+          markPreviewed(post, fingerprint, now);
           changed = true;
         }
         continue;

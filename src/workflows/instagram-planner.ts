@@ -13,7 +13,7 @@ import {
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
 import { followerChange, recordAccountDay } from '../instagram/account';
-import { renderPost } from '../instagram/renderer';
+import { renderHash, renderPost } from '../instagram/renderer';
 import { qaPost } from '../instagram/qa';
 import { markPreviewed } from '../instagram/approval';
 import { editLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
@@ -134,7 +134,7 @@ async function main() {
       }),
   };
   // Fingerprint what the email below shows, so the publisher can tell if it changes afterwards.
-  for (const post of calendar.posts) markPreviewed(post);
+  for (const post of calendar.posts) markPreviewed(post, await renderHash(post.slides));
   const file = saveCalendar(calendar);
   console.log(`💾 Saved ${path.relative(process.cwd(), file)} — theme: "${calendar.theme}"`);
 

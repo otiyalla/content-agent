@@ -18,6 +18,9 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     caption: 'A 50% drawdown needs a 100% return just to get back to zero.',
     hashtags: ['forextrading', 'riskmanagement', 'tradingpsychology'],
     altText: 'Carousel explaining that losing 50% of an account requires a 100% gain to recover.',
+    hookType: 'stat',
+    ctaType: 'save',
+    series: '',
     rationale: 'Sample.',
   },
   {
@@ -30,6 +33,9 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     caption: 'Five questions. Thirty seconds.',
     hashtags: ['forex', 'tradingjournal', 'daytrading'],
     altText: 'Checklist of five questions to answer before entering a trade.',
+    hookType: 'checklist',
+    ctaType: 'save',
+    series: '',
     rationale: 'Sample.',
   },
   {
@@ -42,6 +48,9 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     caption: 'Win rate is the most overrated number in trading.',
     hashtags: ['forextrader', 'tradingtips', 'riskmanagement'],
     altText: 'Myth versus fact card about win rate and profitability.',
+    hookType: 'myth',
+    ctaType: 'share',
+    series: '',
     rationale: 'Sample.',
   },
   {
@@ -54,6 +63,9 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     caption: 'Revenge trading is not a strategy.',
     hashtags: ['tradingpsychology', 'forexlife', 'mindset'],
     altText: 'Quote card about revenge trading after a loss.',
+    hookType: 'mistake',
+    ctaType: 'share',
+    series: '',
     rationale: 'Sample.',
   },
   {
@@ -66,6 +78,9 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     caption: 'Be honest. Nobody is judging.',
     hashtags: ['forex', 'tradingcommunity', 'riskmanagement'],
     altText: 'Poll asking traders how much they risk per trade.',
+    hookType: 'question',
+    ctaType: 'comment',
+    series: '',
     rationale: 'Sample.',
   },
   {
@@ -82,6 +97,9 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     caption: 'A tour of Zenlot.',
     hashtags: ['forextrading', 'tradingjournal'],
     altText: 'Carousel showing Zenlot app screens: risk profile, trade history and behavioural insights.',
+    hookType: 'how-to',
+    ctaType: 'link',
+    series: '',
     rationale: 'Sample.',
   },
 ];

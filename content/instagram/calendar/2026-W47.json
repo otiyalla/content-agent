@@ -65,6 +65,9 @@
         "forexeducation"
       ],
       "altText": "Welcome carousel from Zenlot: build discipline and trade by your rules. Slides cover risk maths, trading psychology, and a Zenlot app screen showing behavioural insights.",
+      "hookType": "contrarian",
+      "ctaType": "follow",
+      "series": "",
       "rationale": "First post on a new account: sets expectations, introduces the product once, and asks a question to start comments.",
       "published": {
         "mediaId": "18082002116475228",

@@ -12,6 +12,7 @@ import {
   slotTime,
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
+import { followerChange, recordAccountDay } from '../instagram/account';
 import { renderPost } from '../instagram/renderer';
 import { qaPost } from '../instagram/qa';
 import { markPreviewed } from '../instagram/approval';
@@ -51,6 +52,21 @@ function mondayFromWeekId(week: string): Date {
 
 const fmtDay = (d: Date) => d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
+/** Account growth for the email: follower change from recorded history, plus last 7 days of profile activity. */
+async function growthHtml(now: Date): Promise<string> {
+  const f = followerChange(7, now);
+  let activity = '';
+  try {
+    const a = await instagramService.getAccountInsights(new Date(now.getTime() - 7 * 86400_000), now);
+    activity = ` · last 7 days: <b>${a.profileViews ?? '–'}</b> profile views, <b>${a.linkTaps ?? '–'}</b> link-in-bio taps, reach ${a.reach ?? '–'}`;
+  } catch (err) {
+    console.warn(`Could not fetch account insights: ${err instanceof Error ? err.message : err}`);
+  }
+  if (f.now === undefined) return `<p style="color:#666">No follower history yet${activity}.</p>`;
+  const sign = (f.change ?? 0) > 0 ? '+' : '';
+  return `<p style="font-size:15px">Followers: <b>${f.now}</b> (${sign}${f.change} in 7 days)${activity}</p>`;
+}
+
 function reportHtml(posts: CalendarPost[]): string {
   const published = posts.filter((p) => p.status === 'published');
   if (published.length === 0) return '<p style="color:#666">No published posts with metrics yet.</p>';
@@ -61,12 +77,12 @@ function reportHtml(posts: CalendarPost[]): string {
       const link = p.published?.permalink ? `<a href="${p.published.permalink}">${title}</a>` : title;
       const ageH = p.published && i.fetchedAt ? Math.round((Date.parse(i.fetchedAt) - Date.parse(p.published.publishedAt)) / 3600_000) : null;
       const age = ageH === null ? '–' : ageH < 48 ? `${ageH}h` : `${Math.round(ageH / 24)}d`;
-      return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${age}</td><td>${i.reach ?? '–'}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
+      return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${age}</td><td>${i.reach ?? '–'}</td><td><b>${i.follows ?? '–'}</b></td><td>${i.profileVisits ?? '–'}</td><td>${i.linkTaps ?? '–'}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
     })
     .join('');
   return `<p style="color:#667;font-size:12px;margin:0 0 6px">Latest numbers. Posts of different ages aren't comparable; the planner compares them at 48 hours.</p>
 <table cellpadding="6" style="border-collapse:collapse;font-size:13px">
-<tr style="background:#f2f4f7;text-align:left"><th>Day</th><th>Post</th><th>Age</th><th>Reach</th><th>Saves</th><th>Shares</th><th>Likes</th><th>Comments</th></tr>${rows}</table>`;
+<tr style="background:#f2f4f7;text-align:left"><th>Day</th><th>Post</th><th>Age</th><th>Reach</th><th>Follows</th><th>Profile visits</th><th>Link taps</th><th>Saves</th><th>Shares</th><th>Likes</th><th>Comments</th></tr>${rows}</table>`;
 }
 
 async function main() {
@@ -132,6 +148,15 @@ async function main() {
     sections.push(postSectionHtml(post, images, attachments, qa.blocking));
   }
 
+  let growth = '';
+  if (instagramService.configured) {
+    try {
+      await recordAccountDay();
+    } catch (err) {
+      console.warn(`Could not record followers: ${err instanceof Error ? err.message : err}`);
+    }
+    growth = await growthHtml(new Date());
+  }
   const edit = editLink(week);
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
 <h2 style="margin-bottom:4px">Instagram plan for ${esc(weekLabel)}</h2>
@@ -143,6 +168,7 @@ You can also edit any slide text or caption there. If a post changes after this 
 and it waits 3 hours before publishing.</p>
 ${sections.join('\n')}
 <h2 style="margin-top:40px">Last week's performance</h2>
+${growth}
 ${reportHtml(lastWeek)}
 </div>`;
 

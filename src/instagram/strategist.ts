@@ -93,6 +93,12 @@ Carousel structure that performs:
 Singles should be the most saveable formats: list (checklists), mythfact, stat, quote, or question.
 Use "question" at most once per week.
 
+# Tags (used to learn what works; tag honestly)
+- hookType: the kind of opening the cover and caption line 1 use (stat, myth, question, mistake, story, how-to, checklist, contrarian).
+- ctaType: the main call to action (save, share, comment, follow, link). The account is new, so growth means follows:
+  use "follow" (e.g. "Follow for more risk maths") on at least 2 of the week's posts.
+- series: the recurring series name if the post belongs to one, else "".
+
 # Captions
 - Line 1 is a hook under 125 characters (it's all people see before "more").
 - 60-180 words total, short paragraphs separated by blank lines.
@@ -127,18 +133,32 @@ export function performanceSummary(posts: CalendarPost[]): string {
   const zeroReach = at48.length - measured.length;
   const notYet = published.length - at48.length;
 
+  // Growth first: follows per 1,000 reach. Weighted engagement (saves and shares count most) breaks ties.
   const scored = measured
     .map((p) => {
       const i = p.insightSnapshots!['48h']!;
       const reach = i.reach ?? 0;
-      // Saves and shares are the strongest ranking signals on Instagram.
       const engagement = (i.saved ?? 0) * 3 + (i.shares ?? 0) * 3 + (i.comments ?? 0) * 2 + (i.likes ?? 0);
-      return { p, i, reach, rate: engagement / reach };
+      return { p, i, reach, followRate: ((i.follows ?? 0) / reach) * 1000, rate: engagement / reach };
     })
-    .sort((a, b) => b.rate - a.rate);
+    .sort((a, b) => b.followRate - a.followRate || b.rate - a.rate);
 
-  const line = ({ p, i, reach, rate }: (typeof scored)[number]) =>
-    `- [${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}, ${p.id.split('-').pop()}] "${(p.slides[0]?.title ?? '').replace(/\*\*/g, '')}" — at 48h: reach ${reach}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement rate ${(rate * 100).toFixed(1)}%`;
+  const line = ({ p, i, reach, followRate, rate }: (typeof scored)[number]) =>
+    `- [${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}, ${p.id.split('-').pop()}, hook ${p.hookType ?? '?'}, cta ${p.ctaType ?? '?'}] "${(p.slides[0]?.title ?? '').replace(/\*\*/g, '')}" — at 48h: reach ${reach}, follows ${i.follows ?? 0} (${followRate.toFixed(1)} per 1k reach), profile visits ${i.profileVisits ?? 0}, link taps ${i.linkTaps ?? 0}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement ${(rate * 100).toFixed(1)}%`;
+
+  // Averages by tag, so the planner sees which hooks and CTAs grow the account.
+  const byTag = (key: 'hookType' | 'ctaType') => {
+    const groups = new Map<string, number[]>();
+    for (const s of scored) {
+      const tag = s.p[key] ?? 'untagged';
+      groups.set(tag, [...(groups.get(tag) ?? []), s.followRate]);
+    }
+    return [...groups.entries()]
+      .map(([tag, rates]) => ({ tag, n: rates.length, avg: rates.reduce((a, b) => a + b, 0) / rates.length }))
+      .sort((a, b) => b.avg - a.avg)
+      .map((g) => `${g.tag} ${g.avg.toFixed(1)}/1k (${g.n} post${g.n > 1 ? 's' : ''})`)
+      .join(', ');
+  };
 
   const counts = [
     `${published.length} published post(s); ${measured.length} measured at 48 hours`,
@@ -155,11 +175,14 @@ export function performanceSummary(posts: CalendarPost[]): string {
   }
 
   return [
-    `${counts}. All numbers below are at 48 hours after publishing, so posts are comparable.`,
+    `${counts}. All numbers below are at 48 hours after publishing, so posts are comparable. Posts are ranked by follows per 1,000 reach (growth), then by weighted engagement.`,
     'Best performers:',
     ...scored.slice(0, 3).map(line),
     'Weakest performers:',
     ...scored.slice(-3).reverse().map(line),
+    `Follows per 1k reach by hook: ${byTag('hookType')}.`,
+    `Follows per 1k reach by CTA: ${byTag('ctaType')}.`,
+    'Groups with fewer than 3 posts are hints, not evidence.',
   ].join('\n');
 }
 

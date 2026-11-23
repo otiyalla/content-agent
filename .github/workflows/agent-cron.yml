@@ -2,8 +2,9 @@ name: Zenlot Content Agent
 
 # Safety switch: these agents run in dry-run mode (no posts, replies or emails) until the
 # repository variable AGENTS_LIVE is "true". Instagram has its own switch (IG_LIVE).
-# Even when live, X/Reddit posts and replies are emailed as drafts for approval unless
-# AGENTS_AUTOPOST is also "true". Drafts that fail the brand check are never auto-posted.
+# Even when live, held drafts are emailed once a day (15:00 UTC, best 5, original post quoted).
+# Replies are never posted automatically. Original posts auto-post only if AGENTS_AUTOPOST is
+# also "true" and they pass the brand check.
 
 on:
   schedule:
@@ -15,6 +16,8 @@ on:
     - cron: '0 10 * * *'
     # Reddit Community — daily at 13:00 UTC (midday US East, peak Reddit activity)
     - cron: '0 13 * * *'
+    # Daily digest — the best 5 held X/Reddit drafts, emailed at 15:00 UTC
+    - cron: '0 15 * * *'
   workflow_dispatch:
     inputs:
       job_type:
@@ -27,10 +30,18 @@ on:
           - creator
           - engager
           - reddit
+          - digest
 
 defaults:
   run:
     working-directory: .
+
+permissions:
+  contents: write # commit the draft queue (content/outbox) between runs
+
+concurrency:
+  group: agents # runs share the draft queue; never write it at the same time
+  cancel-in-progress: false
 
 jobs:
   run-agent:
@@ -148,3 +159,29 @@ jobs:
           DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
           AGENTS_AUTOPOST: ${{ vars.AGENTS_AUTOPOST }}
         run: npm run run:reddit
+
+      - name: Send daily draft digest
+        if: |
+          (github.event_name == 'schedule' && github.event.schedule == '0 15 * * *') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.job_type == 'digest')
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          DRY_RUN: ${{ vars.AGENTS_LIVE == 'true' && 'false' || 'true' }}
+        run: npm run run:digest
+
+      # Live runs keep held drafts in content/outbox/queue.json until the daily digest.
+      - name: Commit draft queue
+        if: always() && vars.AGENTS_LIVE == 'true'
+        run: |
+          git config user.name "zenlot-content-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add content/outbox 2>/dev/null || true
+          if git diff --cached --quiet; then echo "No queue changes"; exit 0; fi
+          git commit -m "chore(outbox): update draft queue $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase
+          git push

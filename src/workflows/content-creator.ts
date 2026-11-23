@@ -1,4 +1,3 @@
-import { researchService } from '../services/research.service';
 import { llmService, ContentType } from '../services/llm.service';
 import { twitterService } from '../services/social/twitter.service';
 import { outbox } from '../services/outbox.service';
@@ -33,7 +32,6 @@ const CONTENT_CALENDAR: { type: ContentType; weight: number; topics: string[] }[
     type: 'commentary',
     weight: 20,
     topics: [
-      'What this week\'s major pair moves reveal about retail positioning',
       'Why most "risk management advice" on Twitter is dangerously incomplete',
       'The revenge trading cycle and why discipline alone does not break it',
       'High win rate traders who are still losing money — a common pattern',
@@ -46,7 +44,7 @@ const CONTENT_CALENDAR: { type: ContentType; weight: number; topics: string[] }[
       'What is your biggest risk management mistake as a new trader?',
       'Do you review your trades weekly? What does your process look like?',
       'Hot take: most traders fail because of position sizing, not strategy. Agree?',
-      'What rule do you wish you had set for yourself on your first blown account?',
+      'If you could set one rule for your first year of trading again, what would it be?',
     ],
   },
   {
@@ -106,15 +104,8 @@ async function runCreator() {
   const { type, topic } = selectContentByWeight();
   console.log(`Selected content type: [${type}] — Topic: "${topic}"`);
 
-  // Get market context for relevance (used by educational + commentary types)
-  let marketContext: string | undefined;
-  if (['educational', 'commentary', 'promotional'].includes(type)) {
-    console.log('Researching current market context...');
-    marketContext = await researchService.getMarketContext('Forex major pairs risk sentiment today');
-    if (marketContext) {
-      console.log(`Found market context (${marketContext.length} chars)`);
-    }
-  }
+  // No live market news in prompts: it invites market calls. Education uses maths you can show.
+  const marketContext: string | undefined = undefined;
 
   // Generate content via Claude with Twitter Engager strategy
   console.log('Generating content via Claude...');
@@ -136,11 +127,16 @@ async function runCreator() {
 
   console.log('Publishing to Twitter...');
   await twitterService.postTweet(generated.content);
-  await outbox.flush('X content creator');
 
   console.log(`✅ Content Creator Workflow complete. [${type}]`);
 }
 
 if (require.main === module) {
-  runCreator().catch(console.error);
+  // Save held drafts even if the run fails part-way, so nothing is lost.
+  runCreator()
+    .catch((err) => {
+      console.error(err);
+      process.exitCode = 1;
+    })
+    .finally(() => outbox.save('X content creator'));
 }

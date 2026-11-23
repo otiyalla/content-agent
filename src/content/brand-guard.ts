@@ -29,6 +29,16 @@ const RULES: Rule[] = [
   { pattern: /\b(risk[- ]free|sure[- ]fire|can't lose|cannot lose)\b/i, why: 'implies risk-free trading' },
   { pattern: /\b(buy|sell|entry|trade) signals?\b|\bsignal (group|service)\b|\bcopy my trades\b/i, why: 'reads as a signals offer' },
 
+  // Invented statistics about traders ("90% of traders lose"). Use maths you can show instead.
+  {
+    pattern: /\b\d{1,3}(?:\.\d+)?\s?%\s+of\s+(?:all\s+|retail\s+|new\s+|forex\s+)*(?:traders|people|users|accounts|investors|beginners)\b/i,
+    why: 'statistic about traders; use maths you can show, or a widely documented figure phrased cautiously',
+  },
+  // Roadmap wording that reads like a signals service (zenlot.ts: approved phrasing).
+  { pattern: /\bopportunit(?:y|ies)[- ]detect\w*/i, why: 'reads like signals; say "spotting setups that match your own rules"' },
+  // Market calls.
+  { pattern: /\b(?:is|looks)\s+(?:about|set|likely|going)\s+to\s+(?:break(?:out)?|rally|pump|dump|crash|reverse)\b|\bprice\s+target\b|\b(?:going|headed)\s+(?:to|towards)\s+\d/i, why: 'reads like a market call or price prediction' },
+
   // Invented social proof.
   { pattern: /\b(traders|users|people|customers|members) (say|said|tell us|told us|love|swear by)\b/i, why: 'invented testimonial' },
 
@@ -47,4 +57,15 @@ export function lintCopy(text: string): string[] {
     if (m) issues.push(`"${m[0]}": ${why}`);
   }
   return issues;
+}
+
+// A reply that names Zenlot to a stranger must say we built it (platform rules, and trust).
+const DISCLOSURE = /\b(?:I|we)(?:'ve| have)?\s+(?:built|build|made|make|created|create|run|work on|started)\b|\b(?:founder|maker|creator|team)\s+(?:of|behind)\s+zenlot\b|\b(?:my|our)\s+(?:own\s+)?app\b|\bdisclosure\b/i;
+
+/** Extra checks for replies to other people's posts. */
+export function lintReply(text: string): string[] {
+  if (/\bzenlot\b/i.test(text) && !DISCLOSURE.test(text)) {
+    return ['names Zenlot without saying we built it; add "I built Zenlot" (or "we built") or remove the mention'];
+  }
+  return [];
 }

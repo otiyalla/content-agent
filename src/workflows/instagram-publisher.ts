@@ -10,6 +10,7 @@ import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
 import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
 import { sendChangePreview } from '../instagram/preview';
+import { renderReshareStory } from '../instagram/reshare-story';
 import type { CalendarPost } from '../instagram/types';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,11 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
 
   if (env.DRY_RUN) {
     console.log(`  [DRY RUN] would upload ${images.length} image(s) and publish:\n${caption.split('\n').map((l) => `    ${l}`).join('\n')}`);
+    const label = STORY_RESHARE_PILLARS[post.pillar];
+    if (label) {
+      await renderReshareStory(images[0], label); // proves it renders
+      console.log(`  [DRY RUN] would also post a "${label}" Story pointing at it`);
+    }
     return;
   }
 
@@ -60,6 +66,30 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   post.published = { mediaId, permalink, publishedAt: new Date().toISOString(), imageUrls };
   delete post.lastError;
   console.log(`  ✅ Published ${permalink ?? mediaId}`);
+
+  await postReshareStory(week, post, images[0]);
+}
+
+// Pillars whose posts also get a Story pointing at them, labelled for their Highlight.
+// The API can't add a Story to a Highlight; that step stays manual (docs/PROFILE.md).
+const STORY_RESHARE_PILLARS: Partial<Record<CalendarPost['pillar'], string>> = {
+  'risk-math': 'Risk maths',
+};
+
+/** Posts the reshare Story for a just-published post. Never throws: the post is already live. */
+async function postReshareStory(week: string, post: CalendarPost, cover: Buffer): Promise<void> {
+  const label = STORY_RESHARE_PILLARS[post.pillar];
+  if (!label || !post.published || post.published.storyMediaId) return;
+  try {
+    const story = await renderReshareStory(cover, label);
+    const hash = crypto.createHash('sha256').update(story).digest('hex').slice(0, 12);
+    const url = await storageService.uploadJpeg(`instagram/${week}/${post.id}/story-${hash}.jpg`, story);
+    const { mediaId } = await instagramService.publishStory(url);
+    post.published.storyMediaId = mediaId;
+    console.log(`  📖 Story posted (${mediaId}); add it to the "${label}" Highlight in the app`);
+  } catch (err) {
+    console.warn(`  ⚠️  Story for ${post.id} failed: ${err instanceof Error ? err.message : err}. Post it by hand: npm run ig:reshare, then ig:story`);
+  }
 }
 
 

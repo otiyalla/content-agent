@@ -20,6 +20,7 @@
     "ig:comments": "ts-node src/workflows/instagram-comments.ts",
     "ig:repreview": "ts-node src/workflows/instagram-repreview.ts",
     "ig:story": "ts-node src/workflows/instagram-story.ts",
+    "ig:reshare": "ts-node src/instagram/reshare-story.ts",
     "run:digest": "ts-node src/workflows/outbox-digest.ts"
   },
   "dependencies": {

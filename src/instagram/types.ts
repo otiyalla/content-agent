@@ -125,6 +125,8 @@ export interface CalendarPost extends Omit<PlannedPost, 'slot'> {
     permalink?: string;
     publishedAt: string;
     imageUrls: string[];
+    /** The Story that points at this post (see STORY_RESHARE_PILLARS in the publisher), if one went out. */
+    storyMediaId?: string;
   };
   insights?: PostInsights; // latest numbers (age varies; for display only)
   /**

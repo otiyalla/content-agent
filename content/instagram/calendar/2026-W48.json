@@ -6,7 +6,7 @@
     {
       "id": "2026-W48-mon",
       "scheduledAt": "2026-11-23T13:00:00.000Z",
-      "status": "scheduled",
+      "status": "published",
       "pillar": "risk-math",
       "topic": "Drawdown recovery asymmetry: the deeper the loss, the steeper the climb back, and how risk per trade sets the depth",
       "slides": [
@@ -79,7 +79,20 @@
       "series": "",
       "rationale": "Fresh account with no performance data, so we open the week with the highest-save format for numerate education: a stepped stat carousel with a painful, verifiable truth in the hook. Every figure is derived from 1/(1−loss)−1 or compounding (0.99^10, 0.95^10), so it builds credibility from post one. It also sets up the theme the rest of the week references. This is our baseline for carousel saves.",
       "previewHash": "a39ed01494149e40",
-      "previewedAt": "2026-11-23T03:54:49.417Z"
+      "previewedAt": "2026-11-23T03:54:49.417Z",
+      "published": {
+        "mediaId": "18114514385182860",
+        "permalink": "https://www.instagram.com/p/DgFil4xj53x/",
+        "publishedAt": "2026-11-23T13:58:01.080Z",
+        "imageUrls": [
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-mon/1-0ff23c327252.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-mon/2-ae3c2829124b.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-mon/3-9ebb343ef082.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-mon/4-462d2c590a35.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-mon/5-820318d599cd.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-mon/6-1d8200903a76.jpg"
+        ]
+      }
     },
     {
       "id": "2026-W48-tue",

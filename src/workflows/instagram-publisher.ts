@@ -1,7 +1,5 @@
 import crypto from 'crypto';
-import path from 'path';
 import { env } from '../config/env';
-import { emailService } from '../services/email.service';
 import { instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
@@ -11,7 +9,7 @@ import { recordAccountDay } from '../instagram/account';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
 import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
-import { editLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
+import { sendChangePreview } from '../instagram/preview';
 import type { CalendarPost } from '../instagram/types';
 
 // ---------------------------------------------------------------------------
@@ -64,28 +62,6 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   console.log(`  ✅ Published ${permalink ?? mediaId}`);
 }
 
-/** Emails a preview of a post that changed after the last preview. */
-async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date): Promise<void> {
-  const images = await renderPost(post.slides);
-  const qa = await qaPost(post);
-  const attachments: Attachment[] = [];
-  const section = postSectionHtml(post, images, attachments, qa.blocking);
-  const after = publishAfter.toUTCString().replace(':00 GMT', ' UTC');
-  const edit = editLink(week);
-  const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
-<h2 style="margin-bottom:4px">A scheduled Instagram post changed</h2>
-<p style="background:#fff7ed;border:1px solid #fed7aa;padding:10px 12px;border-radius:8px;font-size:14px">
-<code>${esc(post.id)}</code> is different from the version you last saw. This is exactly what will be published,
-at the first run after <b>${esc(after)}</b>. To stop it, set its <code>"status"</code> to <code>"skipped"</code>
-${edit ? `in <a href="${edit}">the calendar file</a>` : `in <code>content/instagram/calendar/${week}.json</code>`}.</p>
-${section}</div>`;
-  await emailService.sendHtml(
-    `[Zenlot IG] Changed after preview: ${post.id} publishes after ${after}`,
-    html,
-    attachments,
-    path.join('out', 'instagram', week, `changed-${post.id}.html`),
-  );
-}
 
 async function main() {
   // --now <ISO> lets you simulate a run at a specific time (useful with DRY_RUN).
@@ -129,7 +105,14 @@ async function main() {
       if (post.previewHash && post.previewHash !== contentHash(post)) {
         const after = new Date(now.getTime() + CHANGE_HOLD_MS);
         console.log(`✋ ${post.id} changed since it was previewed — emailing a new preview; it publishes after ${after.toISOString()}`);
-        await sendChangePreview(week, post, after);
+        try {
+          await sendChangePreview(week, post, after);
+        } catch (err) {
+          // Keep holding: a changed post never publishes until its preview has actually been sent.
+          console.error(`  ❌ ${err instanceof Error ? err.message : err}; ${post.id} stays on hold and is retried next run`);
+          failures++;
+          continue;
+        }
         if (!env.DRY_RUN) {
           markPreviewed(post, now);
           changed = true;

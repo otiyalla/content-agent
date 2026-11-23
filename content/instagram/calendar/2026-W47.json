@@ -82,13 +82,30 @@
         ]
       },
       "insights": {
-        "fetchedAt": "2026-11-23T03:09:34.419Z",
+        "fetchedAt": "2026-11-23T03:55:12.862Z",
         "reach": 2,
         "saved": 0,
         "shares": 1,
         "likes": 1,
         "comments": 0,
-        "views": 3
+        "views": 3,
+        "follows": 0,
+        "profileVisits": 0,
+        "linkTaps": 0
+      },
+      "insightSnapshots": {
+        "7d": {
+          "fetchedAt": "2026-11-23T03:55:12.862Z",
+          "reach": 2,
+          "saved": 0,
+          "shares": 1,
+          "likes": 1,
+          "comments": 0,
+          "views": 3,
+          "follows": 0,
+          "profileVisits": 0,
+          "linkTaps": 0
+        }
       }
     }
   ]

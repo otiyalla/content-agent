@@ -1,4 +1,8 @@
+import path from 'path';
+import { emailService } from '../services/email.service';
 import { postAltTexts } from './alt-text';
+import { qaPost } from './qa';
+import { renderPost } from './renderer';
 import type { CalendarPost } from './types';
 
 // HTML for one post in a review email (the Sunday plan and change notices).
@@ -41,4 +45,29 @@ export function editLink(week: string): string | null {
   const repo = process.env.GITHUB_REPOSITORY;
   if (!server || !repo) return null;
   return `${server}/${repo}/edit/${process.env.GITHUB_REF_NAME || 'main'}/content/instagram/calendar/${week}.json`;
+}
+
+/** Emails a preview of a post that changed after the last preview. Throws if the email couldn't be sent. */
+export async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date): Promise<void> {
+  const images = await renderPost(post.slides);
+  const qa = await qaPost(post);
+  const attachments: Attachment[] = [];
+  const section = postSectionHtml(post, images, attachments, qa.blocking);
+  const after = publishAfter.toUTCString().replace(':00 GMT', ' UTC');
+  const edit = editLink(week);
+  const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
+<h2 style="margin-bottom:4px">A scheduled Instagram post changed</h2>
+<p style="background:#fff7ed;border:1px solid #fed7aa;padding:10px 12px;border-radius:8px;font-size:14px">
+<code>${esc(post.id)}</code> is different from the version you last saw. This is exactly what will be published,
+at its scheduled time or the first run after <b>${esc(after)}</b>, whichever is later. To stop it, set its <code>"status"</code> to <code>"skipped"</code>
+${edit ? `in <a href="${edit}">the calendar file</a>` : `in <code>content/instagram/calendar/${week}.json</code>`}.</p>
+${section}</div>`;
+  const ok = await emailService.sendHtml(
+    `[Zenlot IG] Changed after preview: ${post.id} publishes after ${after}`,
+    html,
+    attachments,
+    path.join('out', 'instagram', week, `changed-${post.id}.html`),
+  );
+  // A preview nobody received doesn't count: callers must not mark the post as previewed.
+  if (!ok) throw new Error(`preview email for ${post.id} was not sent`);
 }

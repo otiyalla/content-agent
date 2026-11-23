@@ -23,7 +23,7 @@
           "layout": "stat",
           "kicker": "",
           "title": "To recover from a 10% loss",
-          "body": "$10,000 becomes $9,000. Getting back needs $1,000 on $9,000: **11.1%**.",
+          "body": "10,000 becomes 9,000. Getting back needs 1,000 on 9,000: **11.1%**.",
           "stat": "+11.1%",
           "items": [],
           "screen": ""
@@ -32,7 +32,7 @@
           "layout": "stat",
           "kicker": "",
           "title": "To recover from a 30% loss",
-          "body": "$7,000 needs $3,000 to get back to $10,000. That's 3 ÷ 7 = **42.9%**.",
+          "body": "7,000 needs 3,000 to get back to 10,000. That's 3 ÷ 7 = **42.9%**.",
           "stat": "+42.9%",
           "items": [],
           "screen": ""
@@ -78,8 +78,8 @@
       "ctaType": "save",
       "series": "",
       "rationale": "Fresh account with no performance data, so we open the week with the highest-save format for numerate education: a stepped stat carousel with a painful, verifiable truth in the hook. Every figure is derived from 1/(1−loss)−1 or compounding (0.99^10, 0.95^10), so it builds credibility from post one. It also sets up the theme the rest of the week references. This is our baseline for carousel saves.",
-      "previewHash": "0ad233b6010c6e71",
-      "previewedAt": "2026-11-19T00:31:14.142Z"
+      "previewHash": "a39ed01494149e40",
+      "previewedAt": "2026-11-23T03:54:49.417Z"
     },
     {
       "id": "2026-W48-tue",
@@ -131,7 +131,7 @@
         {
           "layout": "cover",
           "kicker": "Trading psychology",
-          "title": "Your strategy isn't broken. **Five losses** are normal.",
+          "title": "**Five losses** in a row don't prove your strategy is broken.",
           "body": "What a losing streak actually means, in numbers.",
           "stat": "",
           "items": [],
@@ -205,13 +205,13 @@
         "tradingmindset",
         "forexeducation"
       ],
-      "altText": "Slide with the headline: Your strategy isn't broken. Five losses are normal. Subtitle: What a losing streak actually means, in numbers.",
+      "altText": "Slide with the headline: Five losses in a row don't prove your strategy is broken. Subtitle: What a losing streak actually means, in numbers.",
       "hookType": "contrarian",
       "ctaType": "save",
       "series": "",
       "rationale": "No historical data yet, so this deliberately tests the psychology pillar with a reassuring, contrarian hook aimed at our core pain point (traders who blew accounts by revenge trading). It's highly shareable because readers send it to friends mid-drawdown. It links Monday's drawdown maths to behaviour, and all probabilities are shown (0.6^5, 0.99^5).",
-      "previewHash": "5fa6de4287014190",
-      "previewedAt": "2026-11-19T00:31:14.142Z"
+      "previewHash": "127691381dcf7d9f",
+      "previewedAt": "2026-11-23T03:54:14.866Z"
     },
     {
       "id": "2026-W48-thu",
@@ -266,7 +266,7 @@
           "layout": "point",
           "kicker": "The problem",
           "title": "Same lots, different stops, different risk",
-          "body": "$5,000 account, ~$10/pip per lot. 0.5 lots with a 25-pip stop risks $125 (**2.5%**). Same lots, 60-pip stop: $300 (**6%**).",
+          "body": "USD 5,000 account on EURUSD (~$10 a pip per lot). 0.5 lots with a 25-pip stop risks $125 (**2.5%**). Same lots, 60-pip stop: $300 (**6%**).",
           "stat": "",
           "items": [],
           "screen": ""
@@ -283,7 +283,7 @@
         {
           "layout": "stat",
           "kicker": "Worked example",
-          "title": "1% risk, 25-pip stop, $5,000 account",
+          "title": "1% risk, 25-pip stop, USD 5,000 account",
           "body": "$50 risk ÷ (25 pips × $10) = **0.2 lots**. If the stop is hit, you lose about $50.",
           "stat": "0.2 lots",
           "items": [],
@@ -293,7 +293,7 @@
           "layout": "screen",
           "kicker": "In Zenlot",
           "title": "Set your risk **once**",
-          "body": "Example account: CAD 2,064 at **2%** risk. Your limits size every position.",
+          "body": "Example account: CAD 2,064 at **2%** risk. Zenlot recommends a lot size for every trade.",
           "stat": "",
           "items": [],
           "screen": "risk-profile"
@@ -308,7 +308,7 @@
           "screen": ""
         }
       ],
-      "caption": "Trading the same lot size every time feels consistent. It isn't.\n\nYour risk is lot size × stop distance × pip value. Keep the lots fixed and your risk swings with every stop you place. On a $5,000 account, 0.5 lots can mean 2.5% risk on one trade and 6% on the next.\n\nThe fix is to reverse the order: decide the risk, place the stop where the trade is invalid, then calculate the size.\n\nThe extra insight: fixed-% sizing also protects you in drawdowns. As the account shrinks, 1% becomes a smaller dollar amount, so your position size shrinks automatically. That slows the slide, which, as Monday's maths showed, makes recovery far easier.\n\nPip values vary by pair and account currency, so check yours. Or let Zenlot calculate it before every entry. Link in bio.\n\nSave the formula, and share it with a friend who trades \"the usual size.\"\n\nEducational content, not financial advice.",
+      "caption": "Trading the same lot size every time feels consistent. It isn't.\n\nYour risk is lot size × stop distance × pip value. Keep the lots fixed and your risk swings with every stop you place. On a USD 5,000 account trading EURUSD, 0.5 lots can mean 2.5% risk on one trade and 6% on the next.\n\nThe fix is to reverse the order: decide the risk, place the stop where the trade is invalid, then calculate the size.\n\nThe extra insight: fixed-% sizing also protects you in drawdowns. As the account shrinks, 1% becomes a smaller dollar amount, so your position size shrinks automatically. That slows the slide, which, as Monday's maths showed, makes recovery far easier.\n\nPip values vary by pair and account currency, so check yours. Or let Zenlot calculate it before every entry. Link in bio.\n\nSave the formula, and share it with a friend who trades \"the usual size.\"\n\nEducational content, not financial advice.",
       "hashtags": [
         "positionsizing",
         "riskmanagement",
@@ -321,8 +321,8 @@
       "ctaType": "link",
       "series": "",
       "rationale": "This is the week's only Zenlot mention, scheduled last so four value-first posts build trust before it. It leads with a concrete problem and a worked formula that's worth saving even without the app. All figures check out (0.2 lots × $10 × 25 pips = $50; 0.5 × $10 × 60 = $300 = 6%). With no baseline yet, comparing its saves to Monday's carousel will show whether product posts can perform when they lead with education.",
-      "previewHash": "9418ec2d1e1ceab2",
-      "previewedAt": "2026-11-19T00:31:14.142Z"
+      "previewHash": "959d39dc8b8241df",
+      "previewedAt": "2026-11-23T03:54:14.866Z"
     }
   ]
 }

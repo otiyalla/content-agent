@@ -134,8 +134,9 @@ export class InstagramService {
   }
 
   async getInsights(mediaId: string): Promise<PostInsights> {
-    const metrics = ['reach', 'saved', 'shares', 'likes', 'comments', 'views'];
+    const metrics = ['reach', 'saved', 'shares', 'likes', 'comments', 'views', 'follows', 'profile_visits'];
     const out: PostInsights = { fetchedAt: new Date().toISOString() };
+    const names: Record<string, keyof PostInsights> = { profile_visits: 'profileVisits' };
     const res = await this.call<{ data: Array<{ name: string; values?: Array<{ value: number }>; total_value?: { value: number } }> }>(
       'GET',
       `${mediaId}/insights`,
@@ -143,9 +144,34 @@ export class InstagramService {
     );
     for (const m of res.data) {
       const value = m.total_value?.value ?? m.values?.[0]?.value;
-      if (typeof value === 'number') (out as unknown as Record<string, number>)[m.name] = value;
+      if (typeof value === 'number') (out as unknown as Record<string, number>)[names[m.name] ?? m.name] = value;
+    }
+    // Bio-link taps come from profile_activity broken down by action type. Optional: never fail the fetch over it.
+    try {
+      const act = await this.call<{ data: Array<{ total_value?: { value?: number; breakdowns?: Array<{ results?: Array<{ dimension_values: string[]; value: number }> }> } }> }>(
+        'GET',
+        `${mediaId}/insights`,
+        { metric: 'profile_activity', breakdown: 'action_type' },
+      );
+      const results = act.data[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+      out.linkTaps = results.filter((r) => r.dimension_values.includes('bio_link_clicked')).reduce((sum, r) => sum + r.value, 0);
+    } catch {
+      // older posts or API versions may not support the breakdown
     }
     return out;
+  }
+
+  /** Account-wide totals between two dates (max 30 days): profile views, link taps, reach. */
+  async getAccountInsights(since: Date, until: Date): Promise<{ profileViews?: number; linkTaps?: number; websiteClicks?: number; reach?: number }> {
+    const res = await this.call<{ data: Array<{ name: string; total_value?: { value: number } }> }>('GET', `${env.IG_USER_ID}/insights`, {
+      metric: 'profile_views,profile_links_taps,website_clicks,reach',
+      period: 'day',
+      metric_type: 'total_value',
+      since: String(Math.floor(since.getTime() / 1000)),
+      until: String(Math.floor(until.getTime() / 1000)),
+    });
+    const v = (name: string) => res.data.find((d) => d.name === name)?.total_value?.value;
+    return { profileViews: v('profile_views'), linkTaps: v('profile_links_taps'), websiteClicks: v('website_clicks'), reach: v('reach') };
   }
 
   /**

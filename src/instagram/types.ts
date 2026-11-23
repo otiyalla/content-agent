@@ -36,6 +36,20 @@ export const PILLARS = [
   'founder', // the founder's own story (spreadsheet → app), first person, real facts only
 ] as const;
 
+// Tags for reading results later: which opening and which call to action a post used.
+export const HOOK_TYPES = [
+  'stat', // a surprising number up front
+  'myth', // a common belief, then the correction
+  'question', // asks the reader something
+  'mistake', // names a costly habit
+  'story', // founder or scenario narrative
+  'how-to', // promises a method or formula
+  'checklist', // promises a list to keep
+  'contrarian', // challenges popular advice
+] as const;
+
+export const CTA_TYPES = ['save', 'share', 'comment', 'follow', 'link'] as const;
+
 export const SlideSchema = z.object({
   layout: z.enum(SLIDE_LAYOUTS),
   kicker: z.string().describe('Small label above the title, e.g. "RISK MATH" or "Step 2". Empty string if none.'),
@@ -54,6 +68,9 @@ export const PlannedPostSchema = z.object({
   caption: z.string().describe('Full Instagram caption. First line is the hook. Plain text, line breaks allowed, no hashtags here.'),
   hashtags: z.array(z.string()).describe('3-5 targeted hashtags without the # symbol.'),
   altText: z.string().describe('Accessible description of the first image for screen readers, under 300 characters.'),
+  hookType: z.enum(HOOK_TYPES).describe('Which kind of opening the cover and caption line 1 use.'),
+  ctaType: z.enum(CTA_TYPES).describe('The main call to action at the end of the post (cta slide and caption).'),
+  series: z.string().describe('Name of the recurring series this post belongs to, e.g. "Survival Maths". Empty string if none.'),
   rationale: z.string().describe('Why this post should perform, referencing past performance data when available.'),
 });
 
@@ -88,6 +105,9 @@ export interface PostInsights {
   likes?: number;
   comments?: number;
   views?: number;
+  follows?: number; // accounts that followed from this post
+  profileVisits?: number; // profile visits from this post
+  linkTaps?: number; // taps on the link in bio after viewing this post
 }
 
 export interface CalendarPost extends Omit<PlannedPost, 'slot'> {

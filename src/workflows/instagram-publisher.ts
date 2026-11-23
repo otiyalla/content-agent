@@ -7,6 +7,7 @@ import { storageService } from '../services/storage.service';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { renderPost } from '../instagram/renderer';
 import { refreshInsights } from '../instagram/insights';
+import { recordAccountDay } from '../instagram/account';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
 import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
@@ -167,6 +168,13 @@ async function main() {
     await refreshInsights(3, { mode: 'snapshots', now });
   } catch (err) {
     console.warn(`[Insights] snapshot step failed: ${err instanceof Error ? err.message : err}`);
+  }
+  // Follower history (Instagram only gives daily follower counts at 100+ followers).
+  try {
+    const day = await recordAccountDay(now);
+    if (day) console.log(`[Account] ${day.date}: ${day.followers} followers, ${day.posts} posts`);
+  } catch (err) {
+    console.warn(`[Account] follower snapshot failed: ${err instanceof Error ? err.message : err}`);
   }
 
   console.log(`Done: ${published} published, ${failures} failed.`);

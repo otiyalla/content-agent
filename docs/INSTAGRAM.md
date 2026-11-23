@@ -12,6 +12,11 @@ Mon–Thu 13:07, Sat 14:07 ─ publisher ──► renders the post from the cal
                                        ► uploads JPEGs to Cloudflare R2
                                        ► publishes via the Instagram API, records permalink
 18:07 daily ─ retry for anything that failed
+
+Every publisher run also freezes each post's insights at 48 hours and 7 days (follows, profile visits,
+link-in-bio taps, reach, saves, shares) and records the follower count in
+content/instagram/account-history.json. The planner ranks posts by follows per 1,000 reach at 48 hours,
+and only once about 10 posts are measured.
 ```
 
 **Posting schedule** (`src/instagram/calendar.ts` → `WEEKLY_SLOTS`): Mon carousel, Tue single,

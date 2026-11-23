@@ -34,11 +34,39 @@ const EDUCATIONAL_TOPICS = [
   'What your win rate doesn\'t tell you about your profitability',
 ];
 
-function pickEducationalTopic(): string {
-  // Rotate topics deterministically by day of month so the same topic
-  // doesn't repeat on back-to-back runs
-  const dayIndex = new Date().getDate() % EDUCATIONAL_TOPICS.length;
-  return EDUCATIONAL_TOPICS[dayIndex];
+// One new post a week at most, on this UTC weekday, and only once the account has
+// earned comment karma by helping people. Brand-new accounts that post daily get
+// removed or banned in r/Forex.
+const POST_WEEKDAY = 3; // Wednesday
+const MIN_COMMENT_KARMA = 200;
+
+function pickEducationalTopic(now: Date): string {
+  // One topic per week, cycling through the list (no repeats until all 8 are used).
+  const week = Math.floor(now.getTime() / (7 * 86400_000));
+  return EDUCATIONAL_TOPICS[week % EDUCATIONAL_TOPICS.length];
+}
+
+async function postEducational(topic: string): Promise<void> {
+  const targetSubreddit = SUBREDDIT_TIERS.primary[0]; // r/Forex — primary audience
+  console.log(`  Topic: "${topic}" → r/${targetSubreddit}`);
+
+  const educationalPost = await llmService.generateRedditEducationalPost(
+    topic,
+    targetSubreddit,
+  );
+
+  if (educationalPost.title && educationalPost.body) {
+    console.log(`  Title: "${educationalPost.title}"`);
+    console.log(`  Estimated engagement: ${educationalPost.estimatedEngagement}`);
+
+    if (educationalPost.estimatedEngagement === 'low') {
+      console.log('  ⚠️  Low estimated engagement — skipping post. Consider a different topic.');
+    } else {
+      await redditService.createPost(targetSubreddit, educationalPost.title, educationalPost.body);
+    }
+  } else {
+    console.log('  ⚠️  Failed to generate educational post content.');
+  }
 }
 
 async function runRedditCommunity() {
@@ -98,7 +126,7 @@ async function runRedditCommunity() {
     console.log(`  Post: "${post.content.substring(0, 100)}..."`);
     console.log(`  Reply preview: "${reply.substring(0, 120)}..."`);
 
-    await redditService.replyToPost(post.id, reply);
+    await redditService.replyToPost(post.id, reply, { context: `${post.postTitle ? `${post.postTitle}\n\n` : ''}${post.content}`, score, link: post.url });
     engagementsPosted++;
   }
 
@@ -107,28 +135,15 @@ async function runRedditCommunity() {
   // ── Phase 3: Post educational content ────────────────────────────────────
   // Reddit Community Builder: one educational post per run in the most relevant
   // subreddit. 100% value, zero promotion. Builds karma and trusted status.
-  console.log('\n[Phase 3] Creating educational post...');
-
-  const topic = pickEducationalTopic();
-  const targetSubreddit = SUBREDDIT_TIERS.primary[0]; // r/Forex — primary audience
-  console.log(`  Topic: "${topic}" → r/${targetSubreddit}`);
-
-  const educationalPost = await llmService.generateRedditEducationalPost(
-    topic,
-    targetSubreddit,
-  );
-
-  if (educationalPost.title && educationalPost.body) {
-    console.log(`  Title: "${educationalPost.title}"`);
-    console.log(`  Estimated engagement: ${educationalPost.estimatedEngagement}`);
-
-    if (educationalPost.estimatedEngagement === 'low') {
-      console.log('  ⚠️  Low estimated engagement — skipping post. Consider a different topic.');
-    } else {
-      await redditService.createPost(targetSubreddit, educationalPost.title, educationalPost.body);
-    }
+  console.log('\n[Phase 3] Weekly educational post...');
+  const now = new Date();
+  const karmaNow = await redditService.getUserKarma();
+  if (now.getUTCDay() !== POST_WEEKDAY) {
+    console.log('  ⏭  Not the weekly post day (Wednesday UTC); skipping.');
+  } else if (!karmaNow || karmaNow.commentKarma < MIN_COMMENT_KARMA) {
+    console.log(`  ⏭  Comment karma ${karmaNow?.commentKarma ?? 'unknown'} is below ${MIN_COMMENT_KARMA}; earn it with helpful replies before posting.`);
   } else {
-    console.log('  ⚠️  Failed to generate educational post content.');
+    await postEducational(pickEducationalTopic(now));
   }
 
   // ── Phase 4: Karma health check ──────────────────────────────────────────
@@ -152,10 +167,15 @@ async function runRedditCommunity() {
     console.log('  (karma check skipped — mock mode)');
   }
 
-  await outbox.flush('Reddit community');
   console.log('\n✅ Reddit Community Workflow complete.');
 }
 
 if (require.main === module) {
-  runRedditCommunity().catch(console.error);
+  // Save held drafts even if the run fails part-way, so nothing is lost.
+  runRedditCommunity()
+    .catch((err) => {
+      console.error(err);
+      process.exitCode = 1;
+    })
+    .finally(() => outbox.save('Reddit community'));
 }

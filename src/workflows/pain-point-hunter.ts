@@ -124,7 +124,7 @@ async function runHunter() {
       if (post.platform === 'twitter' && analysis.draftResponse) {
         // Twitter: use the short LLM-drafted reply from analyzePainPoint
         console.log(`  💬 Tweeting reply...`);
-        await twitterService.postTweet(analysis.draftResponse, post.id);
+        await twitterService.postTweet(analysis.draftResponse, post.id, { context: post.content, score });
         repliesPosted++;
       } else if (isReddit) {
         // Reddit: generate a proper long-form, markdown, value-first reply
@@ -137,10 +137,11 @@ async function runHunter() {
         );
 
         if (redditReply) {
+          const context = `${post.postTitle ? `${post.postTitle}\n\n` : ''}${post.content}`;
           if (post.isComment) {
-            await redditService.replyToComment(post.id, redditReply);
+            await redditService.replyToComment(post.id, redditReply, { context, score, link: post.url });
           } else {
-            await redditService.replyToPost(post.id, redditReply);
+            await redditService.replyToPost(post.id, redditReply, { context, score, link: post.url });
           }
           repliesPosted++;
         }
@@ -183,10 +184,15 @@ ${feature.supportingQuotes.map((q) => `  • "${q}"`).join('\n')}
     }
   }
 
-  await outbox.flush('pain point hunter');
   console.log(`\n✅ Pain Point Hunter complete. Drafted ${repliesPosted} replies.`);
 }
 
 if (require.main === module) {
-  runHunter().catch(console.error);
+  // Save held drafts even if the run fails part-way, so nothing is lost.
+  runHunter()
+    .catch((err) => {
+      console.error(err);
+      process.exitCode = 1;
+    })
+    .finally(() => outbox.save('pain point hunter'));
 }

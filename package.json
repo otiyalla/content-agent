@@ -18,7 +18,9 @@
     "golive:check": "ts-node src/workflows/golive-check.ts",
     "ig:profile-assets": "ts-node src/instagram/profile-assets.ts",
     "ig:comments": "ts-node src/workflows/instagram-comments.ts",
-    "ig:repreview": "ts-node src/workflows/instagram-repreview.ts"
+    "ig:repreview": "ts-node src/workflows/instagram-repreview.ts",
+    "ig:story": "ts-node src/workflows/instagram-story.ts",
+    "run:digest": "ts-node src/workflows/outbox-digest.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",

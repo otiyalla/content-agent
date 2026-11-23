@@ -1,0 +1,9 @@
+{
+  "_rules": "Accounts the X engager may reply to. Add an account only after checking it: no signals or paid groups, no broker referral (IB) links, no profit screenshots or lifestyle flexing, posts education. Set vettedAt to the date you checked (YYYY-MM-DD). Accounts unchecked for 90 days are skipped until re-checked.",
+  "accounts": [
+    { "handle": "babypips", "vettedAt": "", "notes": "forex education site" },
+    { "handle": "investopedia", "vettedAt": "", "notes": "general finance education" },
+    { "handle": "forex_jayz", "vettedAt": "", "notes": "unchecked" },
+    { "handle": "theforexguy", "vettedAt": "", "notes": "unchecked" }
+  ]
+}

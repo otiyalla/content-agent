@@ -12,7 +12,8 @@ import { outbox } from '../outbox.service';
 
 export const SUBREDDIT_TIERS = {
   primary: ['Forex', 'Daytrading'],
-  secondary: ['algotrading', 'investing', 'personalfinance', 'StockMarket'],
+  // r/investing, r/personalfinance and r/StockMarket were dropped: off-topic for forex and hostile to promotion.
+  secondary: ['algotrading'],
   niche: ['FXtraders', 'TradingView', 'Forex_Trading'],
 } as const;
 
@@ -231,14 +232,19 @@ export class RedditService {
    * Developer Advocate rule: always disclose affiliation naturally in the reply body.
    * The LLM prompt for Reddit replies handles this — never strip it out here.
    */
-  async replyToPost(postId: string, content: string): Promise<string | null> {
-    const allowed = outbox.allow({
+  async replyToPost(postId: string, content: string, meta: { context?: string; score?: number; link?: string } = {}): Promise<string | null> {
+    // Replies are always held for a person (outbox.service.ts).
+    const approved = outbox.allow({
       platform: 'reddit',
+      kind: 'reply',
       action: `reply to post ${postId}`,
       text: content,
-      link: `https://www.reddit.com/comments/${postId}`,
+      link: meta.link ?? `https://www.reddit.com/comments/${postId}`,
+      context: meta.context,
+      score: meta.score,
     });
-    if (!allowed) return null;
+    if (approved === null) return null;
+    content = approved;
 
     if (!this.client || env.DRY_RUN) {
       console.log(`[DRY RUN - Reddit] Reply to ${postId}:\n${content}\n`);
@@ -260,8 +266,18 @@ export class RedditService {
   /**
    * Replies to a specific comment (not a top-level submission).
    */
-  async replyToComment(commentId: string, content: string): Promise<string | null> {
-    if (!outbox.allow({ platform: 'reddit', action: `reply to comment ${commentId}`, text: content })) return null;
+  async replyToComment(commentId: string, content: string, meta: { context?: string; score?: number; link?: string } = {}): Promise<string | null> {
+    const approved = outbox.allow({
+      platform: 'reddit',
+      kind: 'reply',
+      action: `reply to comment ${commentId}`,
+      text: content,
+      link: meta.link, // the comment's permalink, so it can be answered by hand
+      context: meta.context,
+      score: meta.score,
+    });
+    if (approved === null) return null;
+    content = approved;
 
     if (!this.client || env.DRY_RUN) {
       console.log(`[DRY RUN - Reddit] Reply to comment ${commentId}:\n${content}\n`);
@@ -289,14 +305,16 @@ export class RedditService {
     title: string,
     content: string,
   ): Promise<string | null> {
-    const allowed = outbox.allow({
+    const approved = outbox.allow({
       platform: 'reddit',
+      kind: 'post',
       action: `new post in r/${subreddit}`,
       title,
       text: content,
       link: `https://www.reddit.com/r/${subreddit}/submit`,
     });
-    if (!allowed) return null;
+    if (approved === null) return null;
+    content = approved;
 
     if (!this.client || env.DRY_RUN) {
       console.log(

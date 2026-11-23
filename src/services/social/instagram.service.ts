@@ -143,6 +143,17 @@ export class InstagramService {
     return { mediaId, permalink };
   }
 
+  /**
+   * Publishes one image as a Story (1080x1920 JPEG at a public URL). Stories have no
+   * caption, and the API can't add them to a Highlight — that is done in the app.
+   */
+  async publishStory(imageUrl: string): Promise<{ mediaId: string }> {
+    const creationId = await this.createContainer({ media_type: 'STORIES', image_url: imageUrl });
+    await this.waitForContainer(creationId);
+    const { id: mediaId } = await this.call<{ id: string }>('POST', `${env.IG_USER_ID}/media_publish`, { creation_id: creationId });
+    return { mediaId };
+  }
+
   async getInsights(mediaId: string): Promise<PostInsights> {
     const metrics = ['reach', 'saved', 'shares', 'likes', 'comments', 'views', 'follows', 'profile_visits'];
     const out: PostInsights = { fetchedAt: new Date().toISOString() };

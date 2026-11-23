@@ -181,15 +181,19 @@ export class TwitterService {
   /**
    * Posts a new tweet or replies to an existing one.
    */
-  async postTweet(content: string, replyToTweetId?: string): Promise<string | null> {
-    // Approval gate + brand check: held drafts are emailed instead of posted.
-    const allowed = outbox.allow({
+  async postTweet(content: string, replyToTweetId?: string, meta: { context?: string; score?: number } = {}): Promise<string | null> {
+    // Approval gate + brand check. Replies are always held for a person; held drafts go to the daily digest.
+    const approved = outbox.allow({
       platform: 'x',
+      kind: replyToTweetId ? 'reply' : 'post',
       action: replyToTweetId ? `reply to tweet ${replyToTweetId}` : 'new tweet',
       text: content,
       link: replyToTweetId ? `https://x.com/i/web/status/${replyToTweetId}` : undefined,
+      context: meta.context,
+      score: meta.score,
     });
-    if (!allowed) return null;
+    if (approved === null) return null;
+    content = approved;
 
     const tweets = this.splitIntoTweets(content);
 

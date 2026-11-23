@@ -58,9 +58,10 @@ account sizes, blown accounts, specific trades, years or numbers that are not wr
   much he stands to gain or lose, and tell easily whether it's a good or a bad trade.
 The purpose in one line: Zenlot was built to help traders improve discipline and trade by their rules.
 
-Coming next (in development, NOT available yet): opportunity detection, plus general enhancements.
-You may say "we're working on opportunity detection" in founder or community posts, but never describe
-how it works, give dates, or present it as available.
+Coming next (in development, NOT available yet): a feature that spots setups matching your own written
+rules, plus general enhancements. You may say "we're working on spotting setups that match your own rules" in
+founder or community posts, but never describe how it works, give dates, present it as available, or call it
+"opportunity detection", "signals" or "alerts" (those read like a signals service).
 
 Audience: forex traders around the world, not one country. Vary currency pairs (majors, crosses and
 the occasional exotic), don't assume a USD account (say pip value depends on account currency),

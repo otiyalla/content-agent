@@ -63,9 +63,9 @@ ${ZENLOT_PRODUCT}
 
 const HOOK_FORMULAS = [
   "Contrarian take: \"Most traders think X. They're wrong. Here's why:\"",
-  'Story hook: Start with a trading failure or surprising outcome, then deliver the lesson.',
+  'Scenario hook: Open with a clearly hypothetical trader ("Say a trader risks 3% a trade...") and show where it leads. Label it hypothetical.',
   'Question hook: Open with a question that challenges conventional wisdom.',
-  'Data hook: Lead with a stat or observation from real trading behavior.',
+  'Maths hook: Lead with a number you can compute and show (e.g. "a 30% drawdown needs +42.9% to recover"). Never quote statistics about traders.',
   "Consequence hook: \"If you're doing X, here's what's actually happening to your account:\"",
 ];
 
@@ -120,7 +120,7 @@ Reply in this exact JSON format:
   "isSolvableByZenlot": boolean,
   "explanation": "Brief explanation.",
   "engagementScore": number,
-  "draftResponse": "If solvable: empathetic reply leading with value, mention Zenlot naturally. Under 240 chars for direct replies, or start with '🧵' for a thread.",
+  "draftResponse": "If solvable: empathetic reply leading with value. No trade calls or predictions. If it mentions Zenlot it must say we built it, e.g. 'I built Zenlot (free) for exactly this'. Under 240 chars.",
   "featureRequest": "If not solvable: brief feature request description."
 }`;
 
@@ -151,7 +151,7 @@ Reply in this exact JSON format:
       personal:
         'Write a first-person post from the founder about building Zenlot, using ONLY the facts in the founder story above (never invent scenes, numbers or outcomes). Authentic, not polished.',
       commentary:
-        'Write sharp industry commentary on current market behaviour or a common trader mistake. Contrarian but backed by logic.',
+        'Write sharp commentary on a common trader habit or a piece of popular trading advice. Contrarian but backed by logic. Never comment on current market moves or prices.',
       engagement:
         'Write a reply-bait post: ask a genuine question about trader habits or poll the community on a risk management dilemma.',
       promotional:
@@ -171,9 +171,12 @@ Hook guidance: ${hookInstructions}
 Content guidance: ${typeGuidance[contentType]}
 
 Rules:
+- Education only: no trade calls, price predictions, price levels or opinions on where any market is going.
+- No statistics about traders or quotes from people unless they're in the product facts above. Use maths you can show.
+- Never invent personal experiences; first-person posts use ONLY the founder story above.
 - No hashtag spam (max 1 if truly relevant). No cringe emojis. Professional and sleek.
 - If under 280 chars, return a single tweet. If it needs more space, format as a numbered thread starting with 🧵.
-- Mention Zenlot only for promotional type, or very naturally in educational content.
+- Mention Zenlot only for the promotional or personal type.
 - Be contrarian but logical. Always deliver real value.
 
 Return JSON:
@@ -356,6 +359,7 @@ Score this engagement opportunity (1-10) based on:
 - How naturally Zenlot fits into the conversation
 
 If score >= 6, draft a reply that adds real insight (not a promotion). Keep it under 240 chars.
+Never give trade calls, price predictions or opinions on a market. Don't mention Zenlot in these replies.
 
 Return JSON:
 {

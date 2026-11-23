@@ -59,11 +59,14 @@ function reportHtml(posts: CalendarPost[]): string {
       const i = p.insights ?? ({} as NonNullable<CalendarPost['insights']>);
       const title = esc(p.slides[0]?.title.replace(/\*\*/g, '') ?? p.topic);
       const link = p.published?.permalink ? `<a href="${p.published.permalink}">${title}</a>` : title;
-      return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${i.reach ?? '–'}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
+      const ageH = p.published && i.fetchedAt ? Math.round((Date.parse(i.fetchedAt) - Date.parse(p.published.publishedAt)) / 3600_000) : null;
+      const age = ageH === null ? '–' : ageH < 48 ? `${ageH}h` : `${Math.round(ageH / 24)}d`;
+      return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${age}</td><td>${i.reach ?? '–'}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
     })
     .join('');
-  return `<table cellpadding="6" style="border-collapse:collapse;font-size:13px">
-<tr style="background:#f2f4f7;text-align:left"><th>Day</th><th>Post</th><th>Reach</th><th>Saves</th><th>Shares</th><th>Likes</th><th>Comments</th></tr>${rows}</table>`;
+  return `<p style="color:#667;font-size:12px;margin:0 0 6px">Latest numbers. Posts of different ages aren't comparable; the planner compares them at 48 hours.</p>
+<table cellpadding="6" style="border-collapse:collapse;font-size:13px">
+<tr style="background:#f2f4f7;text-align:left"><th>Day</th><th>Post</th><th>Age</th><th>Reach</th><th>Saves</th><th>Shares</th><th>Likes</th><th>Comments</th></tr>${rows}</table>`;
 }
 
 async function main() {

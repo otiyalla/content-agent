@@ -25,7 +25,7 @@ edit `content/instagram/calendar/<week>.json` on GitHub (the email links straigh
 | You want to | Do this |
 |---|---|
 | Stop a post | set `"status": "skipped"` |
-| Fix a typo / reword | edit `slides[].title`, `body`, `items`, or `caption` — images are re-rendered at publish time |
+| Fix a typo / reword | edit `slides[].title`, `body`, `items`, or `caption`. You'll get a fresh preview email and the post waits 3 hours before publishing |
 | Move a post | change `scheduledAt` (ISO time, UTC) |
 | Steer next week | run the workflow manually with **notes**, e.g. "NFP is Friday" |
 | Re-plan a week | run the workflow manually with **force** ticked |
@@ -99,8 +99,8 @@ Variables:
 
 ### 4. Go live
 
-1. **Actions → Zenlot Instagram → Run workflow → plan**. Check the email and the uploaded `instagram-preview` artifact.
-2. Set the `IG_LIVE` variable to `true`. The next publisher run posts whatever is due.
+Follow [GO-LIVE.md](GO-LIVE.md): run the `golive-check` job, clear every ❌, record the manual steps in
+`content/go-live.json`, then set the `IG_LIVE` variable to `true`.
 
 ## LLM failover
 

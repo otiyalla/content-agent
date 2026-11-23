@@ -164,6 +164,12 @@ export class InstagramService {
     return this.call('GET', 'me', { fields: 'user_id,username,followers_count,media_count' });
   }
 
+  /** Public profile fields shown to visitors: bio, link in bio, follower count. Read-only. */
+  async getProfile(): Promise<{ username: string; name?: string; biography?: string; website?: string; followers_count?: number; media_count?: number }> {
+    const id = tokenKind() === 'facebook' ? env.IG_USER_ID! : 'me';
+    return this.call('GET', id, { fields: 'username,name,biography,website,followers_count,media_count' });
+  }
+
   /** Read-only check that publishing is allowed: how many API posts were used in the last 24h. */
   async getPublishingLimit(): Promise<{ quota_usage?: number; config?: { quota_total?: number } }> {
     const res = await this.call<{ data: Array<{ quota_usage?: number; config?: { quota_total?: number } }> }>(

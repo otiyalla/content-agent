@@ -119,7 +119,7 @@ async function main() {
 
   // 2. Plan
   console.log('🧠 Planning the week with the strategist...');
-  const plan = await planWeek({ weekLabel, slots: WEEKLY_SLOTS, recentPosts: history, notes: process.env.IG_PLAN_NOTES });
+  const plan = await planWeek({ weekLabel, slots: WEEKLY_SLOTS, recentPosts: history, notes: process.env.IG_PLAN_NOTES, weekStart: weekMonday });
 
   // 3. Save calendar
   const calendar: WeekCalendar = {

@@ -8,7 +8,7 @@ Sunday 16:00 UTC ─ planner ──► pulls insights on recent posts (what got 
                               ► saves content/instagram/calendar/<week>.json (committed)
                               ► renders every slide, emails the full preview + last week's report
 
-Mon–Thu 13:07, Sat 14:07 ─ publisher ──► renders the post from the calendar JSON
+Mon–Thu + Sat 13:07 ─ publisher ──► renders the post from the calendar JSON
                                        ► uploads JPEGs to Cloudflare R2
                                        ► publishes via the Instagram API, records permalink
 18:07 daily ─ retry for anything that failed
@@ -20,8 +20,17 @@ content/instagram/account-history.json. The planner ranks posts by follows per 1
 and only once about 10 posts are measured.
 ```
 
-**Posting schedule** (`src/instagram/calendar.ts` → `WEEKLY_SLOTS`): Mon carousel, Tue single,
-Wed carousel, Thu single, Sat carousel. 13:00 UTC hits London afternoon and the New York pre-open.
+**Posting schedule** (`src/instagram/calendar.ts` → `WEEKLY_SLOTS`), all at 13:00 UTC, each a named series shown as the cover kicker:
+
+| Day | Format | Series | Pillar |
+|---|---|---|---|
+| Mon | carousel | Survival Maths | risk maths |
+| Tue | single | Pre-Trade Check | process / myth-busting |
+| Wed | carousel | Inside Zenlot / From the Founder | the week's only Zenlot post, alternating |
+| Thu | single | Trader's Mind | psychology (often a hypothetical scenario) |
+| Sat | carousel | Weekend Review | journaling and weekly review |
+
+Year-end and new-year weeks get seasonal guidance automatically (`src/instagram/seasonal.ts`).
 
 ## Reviewing and vetoing posts
 

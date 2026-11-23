@@ -146,6 +146,14 @@ async function main() {
     if (changed && !env.DRY_RUN) saveCalendar(cal);
   }
 
+  // Measurements use the real clock. A simulated run (--now) must never save them under a made-up time.
+  if (nowArg >= 0) {
+    console.log('Simulated time (--now): skipping insight snapshots and follower history.');
+    console.log(`Done: ${published} published, ${failures} failed.`);
+    if (failures > 0) process.exitCode = 1;
+    return;
+  }
+
   // Freeze 48h / 7d insight snapshots that are due, so the planner can compare posts at equal ages.
   try {
     await refreshInsights(3, { mode: 'snapshots', now });

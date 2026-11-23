@@ -89,29 +89,33 @@ export class InstagramService {
   }
 
   /**
-   * Publishes one image or a carousel. Returns the published media id and permalink.
-   * imageUrls must be public JPEG URLs.
+   * Creates an image container with alt text. alt_text support differs between
+   * API hosts and versions, so if it's rejected we retry without it rather than
+   * lose the post.
    */
-  async publish(imageUrls: string[], caption: string, altText?: string): Promise<{ mediaId: string; permalink?: string }> {
+  private async createImageContainer(params: Record<string, string>, altText?: string): Promise<string> {
+    if (!altText) return this.createContainer(params);
+    try {
+      return await this.createContainer({ ...params, alt_text: altText });
+    } catch (err) {
+      console.warn(`  alt_text rejected (${err instanceof Error ? err.message : err}) — retrying without it`);
+      return this.createContainer(params);
+    }
+  }
+
+  /**
+   * Publishes one image or a carousel. Returns the published media id and permalink.
+   * imageUrls must be public JPEG URLs; altTexts[i] describes imageUrls[i].
+   */
+  async publish(imageUrls: string[], caption: string, altTexts: string[] = []): Promise<{ mediaId: string; permalink?: string }> {
     let creationId: string;
 
     if (imageUrls.length === 1) {
-      try {
-        creationId = await this.createContainer({
-          image_url: imageUrls[0],
-          caption,
-          ...(altText ? { alt_text: altText } : {}),
-        });
-      } catch (err) {
-        // alt_text support differs between API hosts; never lose a post over it.
-        if (!altText) throw err;
-        console.warn(`  alt_text rejected (${err instanceof Error ? err.message : err}) — retrying without it`);
-        creationId = await this.createContainer({ image_url: imageUrls[0], caption });
-      }
+      creationId = await this.createImageContainer({ image_url: imageUrls[0], caption }, altTexts[0]);
     } else {
       const children: string[] = [];
-      for (const url of imageUrls) {
-        children.push(await this.createContainer({ image_url: url, is_carousel_item: 'true' }));
+      for (let i = 0; i < imageUrls.length; i++) {
+        children.push(await this.createImageContainer({ image_url: imageUrls[i], is_carousel_item: 'true' }, altTexts[i]));
       }
       for (const child of children) await this.waitForContainer(child);
       creationId = await this.createContainer({ media_type: 'CAROUSEL', children: children.join(','), caption });

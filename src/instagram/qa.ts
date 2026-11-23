@@ -1,6 +1,9 @@
 import zlib from 'zlib';
 import { lintCopy } from '../content/brand-guard';
 import { loadFonts } from './brand';
+import { layoutIssues } from './layout-check';
+import { mathIssues } from './math-check';
+import { SCREENS } from './screens';
 import type { Slide } from './types';
 
 // ---------------------------------------------------------------------------
@@ -11,6 +14,10 @@ import type { Slide } from './types';
 //    table (cmap) out of the WOFF files the renderer loads, swap common maths
 //    symbols for plain-text versions, and block anything still missing.
 // 2. Brand check: the same rules X and Reddit use (src/content/brand-guard.ts).
+// 3. Layout check: text that would overflow the slide (layout-check.ts).
+// 4. Maths check: sums, recovery and streak figures recomputed (math-check.ts).
+// 5. Screen figures: a worked example must match the app screen it sits next
+//    to, or the screen slide must say what the screen's figures are.
 // ---------------------------------------------------------------------------
 
 /** Reads the set of code points a WOFF font can draw. */
@@ -136,6 +143,63 @@ export function normalizeSlide(slide: Slide): Slide {
   return copy;
 }
 
+// ---------------------------------------------------------------------------
+// Screen figures
+// ---------------------------------------------------------------------------
+
+const MONEY = String.raw`(?:[$€£]\s?|\b(?:USD|CAD|EUR|GBP|AUD)\s?)(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?\s*(k\b)?`;
+const BALANCE_RE = new RegExp(String.raw`${MONEY}\s+account|account\s+(?:of|balance\s+of|size\s+of|balance:?)\s+${MONEY}`, 'gi');
+const RISK_RE = /(\d+(?:\.\d+)?)%\s+risk\b|\brisk(?:ing)?\s+(\d+(?:\.\d+)?)%/gi;
+
+function slideText(s: Slide): string {
+  return [s.kicker, s.title, s.body, s.stat, ...s.items].join(' ').replace(/\*\*/g, '');
+}
+
+function screenFigureIssues(slides: Slide[]): string[] {
+  const issues: string[] = [];
+  slides.forEach((screenSlide, i) => {
+    if (screenSlide.layout !== 'screen' || !screenSlide.screen) return;
+    const f = SCREENS[screenSlide.screen].figures;
+    if (!f) return;
+
+    const conflicts: string[] = [];
+    slides.forEach((other, j) => {
+      if (j === i) return;
+      const text = slideText(other);
+      if (f.accountBalance !== undefined) {
+        for (const m of text.matchAll(BALANCE_RE)) {
+          const raw = m[1] ?? m[3];
+          const value = Number(raw.replace(/,/g, '')) * ((m[2] ?? m[4]) ? 1000 : 1);
+          if (Math.abs(value - f.accountBalance) >= 1) conflicts.push(`slide ${j + 1} uses a "${m[0].trim()}"`);
+        }
+      }
+      if (f.riskPerTradePct !== undefined) {
+        for (const m of text.matchAll(RISK_RE)) {
+          if (Number(m[1] ?? m[2]) !== f.riskPerTradePct) conflicts.push(`slide ${j + 1} uses "${m[0].trim()}"`);
+        }
+      }
+    });
+    if (!conflicts.length) return;
+
+    // Different numbers are fine if the screen slide says what the screen shows.
+    const own = slideText(screenSlide);
+    const balance = f.accountBalance !== undefined ? Math.floor(f.accountBalance) : undefined;
+    const quotesBalance = balance === undefined || own.replace(/,/g, '').includes(String(balance));
+    const quotesRisk = f.riskPerTradePct === undefined || new RegExp(String.raw`\b${f.riskPerTradePct}%`).test(own);
+    if (quotesBalance && quotesRisk) return;
+
+    const shown = [
+      balance !== undefined ? `${f.accountCurrency ?? ''} ${balance.toLocaleString('en-US')}`.trim() : '',
+      f.riskPerTradePct !== undefined ? `${f.riskPerTradePct}% risk` : '',
+    ].filter(Boolean).join(' at ');
+    issues.push(
+      `slide ${i + 1} shows the ${screenSlide.screen} screen (${shown}) but ${[...new Set(conflicts)].join(', ')}. ` +
+        `Use the screen's figures, or say them on slide ${i + 1} (e.g. "Example account: ${shown}")`,
+    );
+  });
+  return issues;
+}
+
 export interface PostQa {
   fixes: string[]; // symbols swapped for plain text (fine to publish)
   blocking: string[]; // must be fixed before publishing
@@ -145,10 +209,10 @@ export interface PostQa {
  * Checks a post. With fix=true the slides are edited in place (planning time),
  * otherwise fixes are only reported (the renderer applies them on the fly).
  */
-export function qaPost(
+export async function qaPost(
   post: { slides: Slide[]; caption: string; altText?: string },
   opts: { fix?: boolean } = {},
-): PostQa {
+): Promise<PostQa> {
   const { body, mono } = fontCoverage();
   const fixes: string[] = [];
   const blocking: string[] = [];
@@ -172,6 +236,12 @@ export function qaPost(
     const lint = lintCopy([slide.kicker, slide.title, slide.body, slide.stat, ...slide.items].join('\n'));
     for (const issue of lint) blocking.push(`${where}: ${issue}`);
   });
+
+  for (let i = 0; i < post.slides.length; i++) {
+    blocking.push(...(await layoutIssues(normalizeSlide(post.slides[i]), i, post.slides.length)));
+  }
+  blocking.push(...mathIssues(post));
+  blocking.push(...screenFigureIssues(post.slides));
 
   for (const issue of lintCopy(post.caption)) blocking.push(`caption: ${issue}`);
   if (!/not financial advice/i.test(post.caption)) blocking.push('caption: missing "not financial advice" line');

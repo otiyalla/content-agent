@@ -1,18 +1,24 @@
 import crypto from 'crypto';
+import path from 'path';
 import { env } from '../config/env';
+import { emailService } from '../services/email.service';
 import { instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { renderPost } from '../instagram/renderer';
 import { qaPost } from '../instagram/qa';
+import { postAltTexts } from '../instagram/alt-text';
+import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
+import { editLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
 import type { CalendarPost } from '../instagram/types';
 
 // ---------------------------------------------------------------------------
 // Instagram publisher — runs a few times a day. Publishes every post whose
 // time has come and that a human hasn't marked "skipped".
 //
-// Images are rendered fresh from the calendar JSON at publish time, so any
-// edits made after the Sunday preview are honoured.
+// Images are rendered fresh from the calendar JSON at publish time. If a post
+// changed after it was previewed, a new preview is emailed first and the post
+// waits CHANGE_HOLD_MS (see approval.ts), so what ships is what was reviewed.
 //
 //   npm run ig:publish
 //   DRY_RUN=true npm run ig:publish -- --now 2026-11-23T13:07:00Z
@@ -30,7 +36,7 @@ function hashtagsBlock(post: CalendarPost): string {
 
 async function publishPost(week: string, post: CalendarPost): Promise<void> {
   // Re-check at publish time: the calendar may have been hand-edited after the Sunday review.
-  const qa = qaPost(post);
+  const qa = await qaPost(post);
   if (qa.fixes.length) console.log(`  QA swapped symbols: ${qa.fixes.join('; ')}`);
   if (qa.blocking.length) throw new Error(`Slide QA blocked publishing: ${qa.blocking.join('; ')}`);
 
@@ -49,11 +55,34 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   }
   console.log(`  Uploaded ${imageUrls.length} image(s) to R2`);
 
-  const { mediaId, permalink } = await instagramService.publish(imageUrls, caption, post.altText);
+  const { mediaId, permalink } = await instagramService.publish(imageUrls, caption, postAltTexts(post));
   post.status = 'published';
   post.published = { mediaId, permalink, publishedAt: new Date().toISOString(), imageUrls };
   delete post.lastError;
   console.log(`  ✅ Published ${permalink ?? mediaId}`);
+}
+
+/** Emails a preview of a post that changed after the last preview. */
+async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date): Promise<void> {
+  const images = await renderPost(post.slides);
+  const qa = await qaPost(post);
+  const attachments: Attachment[] = [];
+  const section = postSectionHtml(post, images, attachments, qa.blocking);
+  const after = publishAfter.toUTCString().replace(':00 GMT', ' UTC');
+  const edit = editLink(week);
+  const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
+<h2 style="margin-bottom:4px">A scheduled Instagram post changed</h2>
+<p style="background:#fff7ed;border:1px solid #fed7aa;padding:10px 12px;border-radius:8px;font-size:14px">
+<code>${esc(post.id)}</code> is different from the version you last saw. This is exactly what will be published,
+at the first run after <b>${esc(after)}</b>. To stop it, set its <code>"status"</code> to <code>"skipped"</code>
+${edit ? `in <a href="${edit}">the calendar file</a>` : `in <code>content/instagram/calendar/${week}.json</code>`}.</p>
+${section}</div>`;
+  await emailService.sendHtml(
+    `[Zenlot IG] Changed after preview: ${post.id} publishes after ${after}`,
+    html,
+    attachments,
+    path.join('out', 'instagram', week, `changed-${post.id}.html`),
+  );
 }
 
 async function main() {
@@ -93,6 +122,23 @@ async function main() {
         console.log(`⏸  ${post.id} due but per-run limit reached; next run will take it`);
         continue;
       }
+
+      // What you reviewed is what ships: a post edited since its preview gets a new preview and a hold.
+      if (post.previewHash && post.previewHash !== contentHash(post)) {
+        const after = new Date(now.getTime() + CHANGE_HOLD_MS);
+        console.log(`✋ ${post.id} changed since it was previewed — emailing a new preview; it publishes after ${after.toISOString()}`);
+        await sendChangePreview(week, post, after);
+        if (!env.DRY_RUN) {
+          markPreviewed(post, now);
+          changed = true;
+        }
+        continue;
+      }
+      if (post.previewedAt && now.getTime() - Date.parse(post.previewedAt) < CHANGE_HOLD_MS) {
+        console.log(`⏳ ${post.id} was re-previewed at ${post.previewedAt}; waiting out the ${CHANGE_HOLD_MS / 3600_000}h veto window`);
+        continue;
+      }
+      if (!post.previewHash) console.warn(`⚠️  ${post.id} has no preview fingerprint (planned before previews were tracked)`);
 
       console.log(`📮 ${post.id}: ${post.topic}`);
       try {

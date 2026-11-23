@@ -79,9 +79,11 @@ Screen rules:
 - Don't use the same screen twice in a week. Only product and founder posts may use screen slides.
 
 Text highlighting: wrap 1-3 key words in **double asterisks** inside title/body to render them in the brand accent colour.
+Use it on most slides, sparingly.
 Slide characters: the slide font only has basic Latin letters, digits and common punctuation. Write maths in plain
 text ("0.6^5 = 7.8%", "about 1 in 13", "x", "/", "~"). No superscripts, ≈, arrows, ticks or emoji on slides.
-Use it on most slides, sparingly.
+Show your working: write each calculation as a plain equation ("3 / 7 = 42.9%", "$50 / (25 x $10) = 0.2 lots")
+so it can be re-checked automatically. Slides with money amounts get an "Illustrative example" label automatically.
 
 Carousel structure that performs:
   1. cover with a scroll-stopping hook (curiosity gap, contrarian claim, or painful truth)
@@ -171,7 +173,7 @@ Produce the week plan.`;
 }
 
 /** Validates structural rules the schema can't express, and repairs what it safely can. */
-export function checkPlan(plan: WeekPlan, slots: Slot[]): string[] {
+export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]> {
   const problems: string[] = [];
   const seen = new Set<number>();
   for (const post of plan.posts) {
@@ -197,7 +199,8 @@ export function checkPlan(plan: WeekPlan, slots: Slot[]): string[] {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
     }
     // Swap unsupported maths symbols in place; anything still unrenderable or off-brand goes back to the model.
-    for (const issue of qaPost(post, { fix: true }).blocking) problems.push(`slot ${post.slot} ${issue}`);
+    // Also checks text fit, recomputes the maths and matches worked examples to app screens.
+    for (const issue of (await qaPost(post, { fix: true })).blocking) problems.push(`slot ${post.slot} ${issue}`);
     post.hashtags = post.hashtags.map((t) => t.replace(/^#/, '').replace(/\s+/g, '')).slice(0, 5);
   }
   for (let i = 0; i < slots.length; i++) if (!seen.has(i)) problems.push(`slot ${i} not filled`);
@@ -248,12 +251,12 @@ export async function planWeek(ctx: PlanningContext): Promise<WeekPlan> {
   const prompt = buildPrompt(ctx);
   let result = await plan(prompt);
 
-  const problems = checkPlan(result, ctx.slots);
+  const problems = await checkPlan(result, ctx.slots);
   if (problems.length) {
     // One repair attempt: tell the model exactly what was wrong.
     console.warn(`[Strategist] plan issues: ${problems.join('; ')} — asking for a corrected plan`);
     result = await plan(`${prompt}\n\nYour previous plan had these problems, fix them:\n- ${problems.join('\n- ')}`);
-    const remaining = checkPlan(result, ctx.slots);
+    const remaining = await checkPlan(result, ctx.slots);
     if (remaining.length) throw new Error(`Week plan still invalid: ${remaining.join('; ')}`);
   }
   return result;

@@ -15,7 +15,8 @@
     "ig:token": "ts-node src/workflows/instagram-token.ts",
     "ig:whoami": "ts-node src/workflows/instagram-whoami.ts",
     "r2:check": "ts-node src/workflows/r2-check.ts",
-    "golive:check": "ts-node src/workflows/golive-check.ts"
+    "golive:check": "ts-node src/workflows/golive-check.ts",
+    "ig:profile-assets": "ts-node src/instagram/profile-assets.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.10.0",

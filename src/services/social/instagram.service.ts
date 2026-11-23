@@ -18,6 +18,16 @@ import type { PostInsights } from '../../instagram/types';
 
 export type TokenKind = 'facebook' | 'instagram';
 
+export interface IgComment {
+  id: string;
+  text: string;
+  username: string;
+  timestamp: string;
+  like_count?: number;
+  hidden?: boolean;
+  replies?: { data: Array<{ id: string; text: string; username: string; timestamp: string }> };
+}
+
 export function tokenKind(token: string | undefined = env.IG_ACCESS_TOKEN): TokenKind {
   if (env.IG_API_HOST) return env.IG_API_HOST.includes('facebook') ? 'facebook' : 'instagram';
   return token?.startsWith('IG') ? 'instagram' : 'facebook';
@@ -188,6 +198,26 @@ export class InstagramService {
       return { user_id: a.id, ...a };
     }
     return this.call('GET', 'me', { fields: 'user_id,username,followers_count,media_count' });
+  }
+
+  /** The account's most recent posts, newest first (includes posts made by hand in the app). */
+  async listRecentMedia(limit = 10): Promise<Array<{ id: string; caption?: string; permalink?: string; timestamp: string; media_type?: string }>> {
+    const id = tokenKind() === 'facebook' ? env.IG_USER_ID! : 'me';
+    const res = await this.call<{ data: Array<{ id: string; caption?: string; permalink?: string; timestamp: string; media_type?: string }> }>(
+      'GET',
+      `${id}/media`,
+      { fields: 'id,caption,permalink,timestamp,media_type', limit: String(limit) },
+    );
+    return res.data;
+  }
+
+  /** Top-level comments on a post, with their replies. Needs instagram_manage_comments. */
+  async getComments(mediaId: string): Promise<IgComment[]> {
+    const res = await this.call<{ data: IgComment[] }>('GET', `${mediaId}/comments`, {
+      fields: 'id,text,username,timestamp,like_count,hidden,replies{id,text,username,timestamp}',
+      limit: '50',
+    });
+    return res.data;
   }
 
   /** Public profile fields shown to visitors: bio, link in bio, follower count. Read-only. */

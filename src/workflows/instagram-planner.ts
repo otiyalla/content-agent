@@ -16,7 +16,7 @@ import { FOLLOWER_GOAL, followerChange, latestFollowers, recordAccountDay } from
 import { renderHash, renderPost } from '../instagram/renderer';
 import { qaPost } from '../instagram/qa';
 import { markPreviewed } from '../instagram/approval';
-import { editLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
+import { editLink, repoLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
 import { planWeek } from '../instagram/strategist';
 import type { CalendarPost, WeekCalendar } from '../instagram/types';
 
@@ -65,7 +65,8 @@ async function growthHtml(now: Date): Promise<string> {
   if (f.now === undefined) return `<p style="color:#666">No follower history yet${activity}.</p>`;
   const sign = (f.change ?? 0) > 0 ? '+' : '';
   const left = FOLLOWER_GOAL - f.now;
-  const goal = left > 0 ? `<p style="font-size:13px;color:#445">${left} to go to ${FOLLOWER_GOAL}. This week's by-hand steps are in docs/FIRST-FOLLOWERS.md.</p>` : '';
+  const guide = repoLink('docs/FIRST-FOLLOWERS.md');
+  const goal = left > 0 ? `<p style="font-size:13px;color:#445">${left} to go to ${FOLLOWER_GOAL}. By-hand steps: ${guide ? `<a href="${guide}">first followers guide</a>` : 'docs/FIRST-FOLLOWERS.md'}.</p>` : '';
   return `<p style="font-size:15px">Followers: <b>${f.now}</b> (${sign}${f.change} in 7 days)${activity}</p>${goal}`;
 }
 

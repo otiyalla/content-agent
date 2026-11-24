@@ -1,6 +1,6 @@
 import { llmService, ContentType } from '../services/llm.service';
 import { twitterService } from '../services/social/twitter.service';
-import { NFA, X_LIMIT, isThread, outbox } from '../services/outbox.service';
+import { NFA, X_LIMIT, outbox } from '../services/outbox.service';
 import { ZENLOT_LINKS } from '../config/zenlot';
 
 // Content mix strategy from Twitter Engager:
@@ -79,7 +79,9 @@ export function withInstagram(text: string, type: ContentType, roll = Math.rando
   if (!INSTAGRAM_TYPES.includes(type) || roll >= INSTAGRAM_SHARE || /instagram/i.test(text)) return text;
   const added = `${text.trim()}\n\n${INSTAGRAM_LINE}`;
   const full = /not financial advice/i.test(added) ? added : `${added}\n\n${NFA}`;
-  return isThread(text) || full.length <= X_LIMIT ? added : text;
+  // Only a post that's already a thread may grow past one post; a short numbered list must stay whole.
+  const alreadyThread = text.includes('🧵') || text.length > X_LIMIT;
+  return alreadyThread || full.length <= X_LIMIT ? added : text;
 }
 
 // Best posting times (EST) aligned to peak forex/finance Twitter activity

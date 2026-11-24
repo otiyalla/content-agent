@@ -194,12 +194,28 @@ function followRule(min: number): string {
   return min ? `The account is new, so at least ${min} posts use "follow". ${how}` : `"follow" is optional. ${how}`;
 }
 
-/** "Follow … <series>" in one sentence: a follow ask that says what following gets you. */
+/**
+ * An ask to follow the account that says what following gets you: "Follow for more <series>" or
+ * "Follow @zenlot_app ... <series>". "Follow your Pre-Trade Check" is advice, not an ask.
+ */
 export function asksToFollow(text: string, series: string): boolean {
   const plain = (s: string) => s.replace(/\*\*/g, '').replace(/[’]/g, "'").toLowerCase();
   return plain(text)
     .split(/[.!?\n]/)
-    .some((sentence) => /\bfollow\b/.test(sentence) && sentence.includes(plain(series)));
+    .some((sentence) => {
+      const ask = /\bfollow\s+(?:(?:us|along|zenlot)\s+)?(?:for\b|@zenlot_app\b)/.exec(sentence);
+      return ask !== null && sentence.slice(ask.index).includes(plain(series));
+    });
+}
+
+/** Adds the follow ask to a caption that lacks it, before the disclaimer. */
+export function withFollowAsk(caption: string, series: string): string {
+  if (asksToFollow(caption, series)) return caption;
+  const ask = `Follow @zenlot_app for more ${series}.`;
+  const lines = caption.trimEnd().split('\n');
+  const at = lines.map((l) => /not financial advice/i.test(l)).lastIndexOf(true);
+  if (at < 0) return `${lines.join('\n')}\n\n${ask}`;
+  return [...lines.slice(0, at), ask, '', ...lines.slice(at)].join('\n');
 }
 
 function buildPrompt(ctx: PlanningContext): string {
@@ -295,14 +311,14 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[], minFollow = minFo
     const series = post.pillar === 'product' || post.pillar === 'founder' ? ZENLOT_SERIES[post.pillar] : slot.series;
     post.series = series;
     if (post.slides[0]) post.slides[0].kicker = series;
-    if (post.ctaType === 'follow' && !asksToFollow(post.caption, series))
-      problems.push(`slot ${post.slot} uses "follow" but its caption never says "Follow … ${series}"`);
     const text = `${post.caption}\n${post.slides.map((sl) => [sl.title, sl.body, ...sl.items].join(' ')).join('\n')}`;
     const crossRef = CROSS_DAY_REF.exec(text);
     if (crossRef) problems.push(`slot ${post.slot} refers to another post ("${crossRef[0]}"); posts must stand alone`);
     if (!post.caption.includes('not financial advice')) {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
     }
+    // Repaired in place: a wording slip must never cost the week its plan.
+    if (post.ctaType === 'follow') post.caption = withFollowAsk(post.caption, series);
     // Swap unsupported maths symbols in place; anything still unrenderable or off-brand goes back to the model.
     // Also checks text fit, recomputes the maths and matches worked examples to app screens.
     for (const issue of (await qaPost(post, { fix: true })).blocking) problems.push(`slot ${post.slot} ${issue}`);

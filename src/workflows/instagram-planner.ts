@@ -133,8 +133,8 @@ async function main() {
         return { id: `${week}-${s.day}`, scheduledAt: slotTime(weekMonday, s).toISOString(), status: 'scheduled' as const, ...post };
       }),
   };
-  // Fingerprint what the email below shows, so the publisher can tell if it changes afterwards.
-  for (const post of calendar.posts) markPreviewed(post, await renderHash(post.slides));
+  // Saved before rendering so a render or email failure never loses the plan. Posts are marked as
+  // previewed only once the email below has been sent; until then the publisher holds them.
   const file = saveCalendar(calendar);
   console.log(`💾 Saved ${path.relative(process.cwd(), file)} — theme: "${calendar.theme}"`);
 
@@ -142,10 +142,19 @@ async function main() {
   console.log('🎨 Rendering preview...');
   const attachments: Attachment[] = [];
   const sections: string[] = [];
+  const fingerprints = new Map<CalendarPost, string>();
   for (const post of calendar.posts) {
-    const images = await renderPost(post.slides);
-    const qa = await qaPost(post);
-    sections.push(postSectionHtml(post, images, attachments, qa.blocking));
+    try {
+      const fingerprint = await renderHash(post);
+      const images = await renderPost(post.slides);
+      const qa = await qaPost(post);
+      sections.push(postSectionHtml(post, images, attachments, qa.blocking));
+      fingerprints.set(post, fingerprint);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`  ❌ ${post.id} could not be rendered: ${message}`);
+      sections.push(`<p style="color:#991b1b"><b><code>${esc(post.id)}</code> could not be rendered and won't publish until fixed:</b> ${esc(message)}</p>`);
+    }
   }
 
   let growth = '';
@@ -172,12 +181,18 @@ ${growth}
 ${reportHtml(lastWeek)}
 </div>`;
 
-  await emailService.sendHtml(
+  const ok = await emailService.sendHtml(
     `[Zenlot IG] Plan for ${week}: ${calendar.theme}`,
     html,
     attachments,
     path.join('out', 'instagram', week, 'preview.html'),
   );
+  if (!ok) throw new Error('The plan is saved but its preview email was not sent. Each post will be previewed and held before it publishes; run ig:repreview to send the previews now.');
+  if (!env.DRY_RUN) {
+    const sentAt = new Date();
+    for (const [post, fingerprint] of fingerprints) markPreviewed(post, fingerprint, sentAt);
+    saveCalendar(calendar);
+  }
   console.log('✅ Planner done');
 }
 

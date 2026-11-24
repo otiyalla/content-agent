@@ -28,12 +28,12 @@ export function markPreviewed(post: CalendarPost, renderFingerprint: string, at:
 
 /**
  * Why a post needs a fresh preview before it can publish, or null if what ships matches what was seen.
- * Posts with no preview fingerprint at all (planned before previews were tracked) are left alone.
+ * A post nobody has been emailed (hand-added, or the Sunday email failed) always needs one.
  */
 export function previewMismatch(post: CalendarPost, renderFingerprint: string): string | null {
-  if (!post.previewHash) return null;
+  if (!post.previewHash) return 'it has never been previewed';
   if (post.previewHash !== contentHash(post)) return 'its text changed since the last preview';
   if (post.previewRenderHash !== renderFingerprint)
-    return post.previewRenderHash ? 'the slides look different from the last preview (template, font or screenshot change)' : 'the last preview was sent before slide images were tracked';
+    return post.previewRenderHash ? 'the slides or their alt text differ from the last preview (template, font, screenshot or rendering change)' : 'the last preview was sent before slide images were tracked';
   return null;
 }

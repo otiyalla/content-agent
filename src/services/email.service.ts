@@ -46,7 +46,8 @@ export class EmailService {
         fs.writeFileSync(dryRunPath, local);
         console.log(`  Preview written to ${dryRunPath}`);
       }
-      return true;
+      // Missing SMTP settings in a live run is a failure: nobody received this.
+      return env.DRY_RUN;
     }
 
     try {

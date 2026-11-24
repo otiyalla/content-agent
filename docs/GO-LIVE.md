@@ -65,8 +65,14 @@ To stop everything, delete the variable or set it to anything other than `true`.
 
 ## Editing a post after the Sunday preview
 
-The preview email fingerprints each post: its text, and how its slides look. If you edit its slides, caption,
-hashtags or alt text after that, or a template, font or app screenshot change alters how it renders, the publisher
-emails you a fresh preview of exactly what will go out and waits 3 hours before publishing. After editing a post,
-run `npm run ig:repreview` to send its preview straight away, so the 3 hours start now.
+The preview email fingerprints each post: its text, how its slides look, and every slide's alt text. If any of that
+changes afterwards (an edit, or a template, font, screenshot or image-conversion change), or the post was never
+previewed, the publisher emails you a fresh preview of exactly what will go out and waits 3 hours before publishing.
+
+To send the preview straight away, so the 3 hours start now:
+
+1. `git pull`, so you have the calendar the publisher uses.
+2. Edit the post, then run `npm run ig:repreview` with `DRY_RUN=false` and the SMTP settings.
+3. Commit and push `content/instagram/calendar/`. Until you push, the publisher doesn't know you saw the preview.
+
 To stop a post, set its `"status"` to `"skipped"`.

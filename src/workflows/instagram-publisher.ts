@@ -92,6 +92,12 @@ async function postReshareStory(week: string, post: CalendarPost, cover: Buffer)
   }
 }
 
+function recordFailure(post: CalendarPost, err: unknown): void {
+  post.attempts = (post.attempts ?? 0) + 1;
+  post.lastError = err instanceof Error ? err.message : String(err);
+  post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
+  console.error(`  ❌ ${post.id}: ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
+}
 
 async function main() {
   // --now <ISO> lets you simulate a run at a specific time (useful with DRY_RUN).
@@ -133,7 +139,16 @@ async function main() {
 
       // What you reviewed is what ships: if the text or the rendered slides changed since the preview,
       // email a new preview and hold the post.
-      const fingerprint = await renderHash(post.slides);
+      let fingerprint: string;
+      try {
+        fingerprint = await renderHash(post);
+      } catch (err) {
+        // One broken post must not stop the others.
+        failures++;
+        changed = true;
+        recordFailure(post, err);
+        continue;
+      }
       const mismatch = previewMismatch(post, fingerprint);
       if (mismatch) {
         const after = new Date(now.getTime() + CHANGE_HOLD_MS);
@@ -148,7 +163,7 @@ async function main() {
         }
         if (!env.DRY_RUN) {
           markPreviewed(post, fingerprint, now);
-          changed = true;
+          saveCalendar(cal); // the email is out: don't send it again if this run crashes later
         }
         continue;
       }
@@ -156,22 +171,19 @@ async function main() {
         console.log(`⏳ ${post.id} was re-previewed at ${post.previewedAt}; waiting out the ${CHANGE_HOLD_MS / 3600_000}h veto window`);
         continue;
       }
-      if (!post.previewHash) console.warn(`⚠️  ${post.id} has no preview fingerprint (planned before previews were tracked)`);
 
       console.log(`📮 ${post.id}: ${post.topic}`);
       try {
         await publishPost(week, post);
         if (!env.DRY_RUN) {
           published++;
-          changed = true;
+          // Save now: if anything later in this run crashes, this post must never be published again.
+          saveCalendar(cal);
         }
       } catch (err) {
         failures++;
-        post.attempts = (post.attempts ?? 0) + 1;
-        post.lastError = err instanceof Error ? err.message : String(err);
-        post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
         changed = true;
-        console.error(`  ❌ ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
+        recordFailure(post, err);
       }
     }
 

@@ -91,7 +91,7 @@ export type Pillar = (typeof PILLARS)[number];
 
 export type PostStatus =
   | 'scheduled' // waiting for its time
-  | 'skipped' // a human vetoed it — never publish
+  | 'skipped' // never publish: a human vetoed it, or the planner held it (see held)
   | 'published'
   | 'failed' // publish attempted and errored; will retry until overdue
   | 'missed'; // never published and now too old to be relevant
@@ -115,6 +115,8 @@ export interface CalendarPost extends Omit<PlannedPost, 'slot'> {
   id: string; // e.g. "2026-W48-mon"
   scheduledAt: string; // ISO timestamp (UTC)
   status: PostStatus;
+  /** Why the planner held this post back (status "skipped"). Fix it, then set the status to "scheduled". */
+  held?: string[];
   attempts?: number;
   lastError?: string;
   /** Fingerprint of the content as last previewed by email (see approval.ts). */

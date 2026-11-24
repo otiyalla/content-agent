@@ -6,7 +6,7 @@
 // the same UTC times as .github/workflows/instagram.yml. If GitHub's schedule
 // comes back, the duplicates are harmless: runs share a concurrency group, the
 // publisher only posts what is due and never posts twice, and the planner skips
-// a week that already has a calendar.
+// a week that already has a calendar (a run that slips into Monday still means that week).
 //
 // Keep CRONS in step with wrangler.toml [triggers] and the workflow's schedule.
 // GITHUB_TOKEN: fine-grained token, this repository only, "Actions: read and write".

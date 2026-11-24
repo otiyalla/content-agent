@@ -22,8 +22,8 @@ import { emailService } from './email.service';
 
 export const DIGEST_CAP = 5;
 const MAX_AGE_MS = 48 * 3600_000; // a reply to a 2-day-old thread is stale
-const X_LIMIT = 280;
-const NFA = 'Not financial advice.';
+export const X_LIMIT = 280;
+export const NFA = 'Not financial advice.';
 
 export interface OutboundDraft {
   platform: 'x' | 'reddit';
@@ -55,13 +55,15 @@ export function saveQueue(queue: QueuedDraft[]): void {
   fs.writeFileSync(QUEUE_FILE, `${JSON.stringify(queue, null, 2)}\n`);
 }
 
+/** Whether an X draft is written as a thread, so it can run past one post's limit. */
+export const isThread = (text: string) => text.includes('🧵') || /\n\s*\d+[/.)]/.test(text);
+
 /** Adds the disclaimer to original posts that lack one, if it fits. */
 function withDisclaimer(d: OutboundDraft): { text: string; issue?: string } {
   if (d.kind !== 'post' || /not financial advice/i.test(d.text)) return { text: d.text };
   if (d.platform === 'reddit') return { text: `${d.text.trim()}\n\n*${NFA}*` };
-  const isThread = d.text.includes('🧵') || /\n\s*\d+[/.)]/.test(d.text);
   const added = `${d.text.trim()}\n\n${NFA}`;
-  if (isThread || added.length <= X_LIMIT) return { text: added };
+  if (isThread(d.text) || added.length <= X_LIMIT) return { text: added };
   return { text: d.text, issue: `no room for "${NFA}" within ${X_LIMIT} characters; shorten it` };
 }
 

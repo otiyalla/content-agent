@@ -60,10 +60,18 @@ and **no** profit screenshots. Same rule as `content/x-targets.json`.
 Once or twice a week, share that day's post to your Story and answer any replies. Risk-maths posts already get one
 automatically.
 
-## 3. Ask app users
+## 3. Ask app users and X readers
 
-An optional "Follow us on Instagram" link in the Zenlot app, shown after a trade verdict. This needs a change in the
-app's own repository, so it ships with an app release.
+- **Welcome email:** new users get a link to @zenlot_app in their sign-up email (English, French and Spanish), with
+  the "we never DM you for money" line. It lives in the `zenlot-server` repository. Password and account-deletion
+  emails stay free of promotion.
+- **Zenlot's X account:** about half of the educational, founder and product drafts end with a link to Instagram. Nothing goes out until
+  `AGENTS_LIVE` is `true` ([X-REDDIT.md](X-REDDIT.md)). Until then, post this by hand from Zenlot's X account and pin it:
+
+> Zenlot is on Instagram: risk maths with the working shown, pre-trade checklists and how to review your trades. No
+> signals. https://www.instagram.com/zenlot_app/ Not financial advice.
+
+There's no follow link inside the app itself.
 
 ## Never
 

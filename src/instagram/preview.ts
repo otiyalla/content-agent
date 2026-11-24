@@ -47,6 +47,13 @@ export function editLink(week: string): string | null {
   return `${server}/${repo}/edit/${process.env.GITHUB_REF_NAME || 'main'}/content/instagram/calendar/${week}.json`;
 }
 
+/** Link to a file in the repository, when running on GitHub. */
+export function repoLink(file: string): string | null {
+  const server = process.env.GITHUB_SERVER_URL;
+  const repo = process.env.GITHUB_REPOSITORY;
+  return server && repo ? `${server}/${repo}/blob/${process.env.GITHUB_REF_NAME || 'main'}/${file}` : null;
+}
+
 /** Emails a preview of a post that changed after the last preview, or was never previewed. Throws if the email couldn't be sent. */
 export async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date, reason = 'it changed since the last preview'): Promise<void> {
   const images = await renderPost(post.slides);

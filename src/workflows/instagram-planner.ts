@@ -12,11 +12,11 @@ import {
   slotTime,
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
-import { followerChange, recordAccountDay } from '../instagram/account';
+import { FOLLOWER_GOAL, followerChange, latestFollowers, recordAccountDay } from '../instagram/account';
 import { renderHash, renderPost } from '../instagram/renderer';
 import { qaPost } from '../instagram/qa';
 import { markPreviewed } from '../instagram/approval';
-import { editLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
+import { editLink, repoLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
 import { planWeek } from '../instagram/strategist';
 import type { CalendarPost, WeekCalendar } from '../instagram/types';
 
@@ -64,7 +64,10 @@ async function growthHtml(now: Date): Promise<string> {
   }
   if (f.now === undefined) return `<p style="color:#666">No follower history yet${activity}.</p>`;
   const sign = (f.change ?? 0) > 0 ? '+' : '';
-  return `<p style="font-size:15px">Followers: <b>${f.now}</b> (${sign}${f.change} in 7 days)${activity}</p>`;
+  const left = FOLLOWER_GOAL - f.now;
+  const guide = repoLink('docs/FIRST-FOLLOWERS.md');
+  const goal = left > 0 ? `<p style="font-size:13px;color:#445">${left} to go to ${FOLLOWER_GOAL}. By-hand steps: ${guide ? `<a href="${guide}">first followers guide</a>` : 'docs/FIRST-FOLLOWERS.md'}.</p>` : '';
+  return `<p style="font-size:15px">Followers: <b>${f.now}</b> (${sign}${f.change} in 7 days)${activity}</p>${goal}`;
 }
 
 function reportHtml(posts: CalendarPost[]): string {
@@ -107,9 +110,11 @@ async function main() {
   const lastWeek = recentPosts(1);
 
   let account = '';
+  let followers = latestFollowers();
   if (instagramService.configured) {
     try {
       const a = await instagramService.getAccount();
+      followers = a.followers_count ?? followers;
       account = `@${a.username}: ${a.followers_count ?? '?'} followers, ${a.media_count ?? '?'} posts`;
       console.log(`Account: ${account}`);
     } catch (err) {
@@ -119,7 +124,7 @@ async function main() {
 
   // 2. Plan
   console.log('🧠 Planning the week with the strategist...');
-  const plan = await planWeek({ weekLabel, slots: WEEKLY_SLOTS, recentPosts: history, notes: process.env.IG_PLAN_NOTES, weekStart: weekMonday });
+  const plan = await planWeek({ weekLabel, slots: WEEKLY_SLOTS, recentPosts: history, notes: process.env.IG_PLAN_NOTES, followers, weekStart: weekMonday });
 
   // 3. Save calendar
   const calendar: WeekCalendar = {

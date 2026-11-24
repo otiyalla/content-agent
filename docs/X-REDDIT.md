@@ -12,6 +12,8 @@ Four scheduled jobs draft posts and replies (`.github/workflows/agent-cron.yml`)
 
 Original posts get a "Not financial advice." line if they don't have one. An X post with no room for it is held.
 
+About half of X's educational, founder and product posts end with a link to @zenlot_app on Instagram, when it fits.
+
 ## The daily email
 
 Held drafts collect in `content/outbox/queue.json`. At 15:00 UTC you get **one email with the best 5**, each with

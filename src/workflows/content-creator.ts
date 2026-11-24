@@ -1,6 +1,7 @@
 import { llmService, ContentType } from '../services/llm.service';
 import { twitterService } from '../services/social/twitter.service';
-import { outbox } from '../services/outbox.service';
+import { NFA, X_LIMIT, outbox } from '../services/outbox.service';
+import { ZENLOT_LINKS } from '../config/zenlot';
 
 // Content mix strategy from Twitter Engager:
 // Educational 25% | Personal 20% | Commentary 20% | Engagement 15% | Promotional 10% | Entertainment 10%
@@ -67,6 +68,22 @@ const CONTENT_CALENDAR: { type: ContentType; weight: number; topics: string[] }[
   },
 ];
 
+// Some posts point readers to Instagram. Only kinds where a link doesn't get in the way of the post,
+// and only about half of those, so the account doesn't read as an advert.
+const INSTAGRAM_TYPES: ContentType[] = ['educational', 'personal', 'promotional'];
+const INSTAGRAM_SHARE = 0.5;
+const INSTAGRAM_LINE = `More trading maths and checklists on Instagram: ${ZENLOT_LINKS.instagram}`;
+
+/** Adds the Instagram line to some posts, if it fits along with the disclaimer. The wording is fixed, never generated. */
+export function withInstagram(text: string, type: ContentType, roll = Math.random()): string {
+  if (!INSTAGRAM_TYPES.includes(type) || roll >= INSTAGRAM_SHARE || /instagram/i.test(text)) return text;
+  const added = `${text.trim()}\n\n${INSTAGRAM_LINE}`;
+  const full = /not financial advice/i.test(added) ? added : `${added}\n\n${NFA}`;
+  // Only a post that's already a thread may grow past one post; a short numbered list must stay whole.
+  const alreadyThread = text.includes('🧵') || text.length > X_LIMIT;
+  return alreadyThread || full.length <= X_LIMIT ? added : text;
+}
+
 // Best posting times (EST) aligned to peak forex/finance Twitter activity
 const OPTIMAL_POSTING_HOURS = [9, 12, 17, 20]; // 9am, noon, 5pm, 8pm
 
@@ -121,12 +138,15 @@ async function runCreator() {
   console.log(generated.content);
   console.log('----------------------\n');
 
+  const content = withInstagram(generated.content, type);
+  if (content !== generated.content) console.log('🔗 Added the Instagram line.');
+
   if (generated.estimatedEngagement === 'low') {
     console.log('⚠️  Low estimated engagement. Review content before posting or regenerate.');
   }
 
   console.log('Publishing to Twitter...');
-  await twitterService.postTweet(generated.content);
+  await twitterService.postTweet(content);
 
   console.log(`✅ Content Creator Workflow complete. [${type}]`);
 }

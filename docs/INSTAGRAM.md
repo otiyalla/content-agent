@@ -30,6 +30,9 @@ and only once about 10 posts are measured.
 | Thu | single | Trader's Mind | psychology (often a hypothetical scenario) |
 | Sat | carousel | Weekend Review | journaling and weekly review |
 
+Until the account has 1,000 followers, at least 2 of the 5 posts ask people to follow, naming the series.
+The steps only a person can do are in [FIRST-FOLLOWERS.md](FIRST-FOLLOWERS.md).
+
 Year-end and new-year weeks get seasonal guidance automatically (`src/instagram/seasonal.ts`).
 
 ## Reviewing and vetoing posts

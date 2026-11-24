@@ -68,6 +68,16 @@ export function nextWeekMonday(now: Date = new Date()): Date {
   return monday;
 }
 
+/**
+ * Which week a planning run is for. The run is due on Sunday, for the week that starts the next day, but
+ * schedulers run late: one that slips past midnight UTC still means the week that has just begun.
+ * On Monday that week is returned even if it's already planned, so a late duplicate finds it and stops
+ * instead of planning a week too far ahead. Forcing a re-plan never targets a week that's under way.
+ */
+export function weekToPlan(now: Date = new Date(), force = false): Date {
+  return now.getUTCDay() === 1 && !force ? mondayOf(now) : nextWeekMonday(now);
+}
+
 export function slotTime(weekMonday: Date, slot: Slot): Date {
   const d = new Date(weekMonday);
   d.setUTCDate(d.getUTCDate() + DAY_OFFSET[slot.day]);

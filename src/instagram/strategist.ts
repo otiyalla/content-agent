@@ -6,7 +6,7 @@ import { backupSteps, runChain } from '../services/llm-providers';
 import { ZENLOT_PRODUCT } from '../config/zenlot';
 import { screensForPrompt } from './screens';
 import { qaPost } from './qa';
-import { WeekPlanSchema, type WeekPlan, type CalendarPost } from './types';
+import { WeekPlanSchema, type WeekPlan, type PlannedPost, type CalendarPost } from './types';
 import { minFollowPosts } from './account';
 import { ZENLOT_SERIES, type Slot } from './calendar';
 import { seasonalNotes } from './seasonal';
@@ -283,37 +283,57 @@ Produce the week plan.`;
 const CROSS_DAY_REF =
   /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)['’]s\s+(?:post|maths?|lesson|carousel|checklist|slide|numbers|example)|\byesterday['’]?s?\s+post|\bearlier this week\b|\b(?:last|previous|our last)\s+post\b/i;
 
-/** Validates structural rules the schema can't express, and repairs what it safely can. */
-export async function checkPlan(plan: WeekPlan, slots: Slot[], minFollow = minFollowPosts(undefined)): Promise<string[]> {
-  const problems: string[] = [];
+export interface PlanCheck {
+  /** Problems that must never be published, by position in plan.posts. Those posts are held, not the week. */
+  blocking: Map<number, string[]>;
+  /** Style and structure slips worth a retry and a note in the email, but never worth losing a post. */
+  warnings: string[];
+  /** Slots nothing fills. */
+  missing: string[];
+}
+
+/**
+ * Checks the rules the schema can't express, and repairs what it safely can. Brand, maths, advice and
+ * anything that can't be drawn blocks that post; everything else is a warning.
+ */
+export async function checkPlan(plan: WeekPlan, slots: Slot[], minFollow = minFollowPosts(undefined)): Promise<PlanCheck> {
+  const blocking = new Map<number, string[]>();
+  const warnings: string[] = [];
   const seen = new Set<number>();
-  for (const post of plan.posts) {
+  for (const [at, post] of plan.posts.entries()) {
+    const block = (why: string) => blocking.set(at, [...(blocking.get(at) ?? []), why]);
+    const warn = (why: string) => warnings.push(`slot ${post.slot} ${why}`);
     const slot = slots[post.slot];
     if (!slot) {
-      problems.push(`post "${post.topic}" uses unknown slot ${post.slot}`);
+      block(`post "${post.topic}" uses unknown slot ${post.slot}`);
       continue;
     }
-    if (seen.has(post.slot)) problems.push(`slot ${post.slot} used twice`);
+    if (seen.has(post.slot)) block(`slot ${post.slot} used twice`);
     seen.add(post.slot);
-    if (slot.format === 'single' && post.slides.length !== 1) problems.push(`slot ${post.slot} is single but has ${post.slides.length} slides`);
-    if (slot.format === 'carousel' && (post.slides.length < 3 || post.slides.length > 10))
-      problems.push(`slot ${post.slot} carousel has ${post.slides.length} slides`);
+    if (post.slides.length < 1 || post.slides.length > 10) block(`has ${post.slides.length} slides`);
+    else if (slot.format === 'single' && post.slides.length !== 1) warn(`is single but has ${post.slides.length} slides`);
+    else if (slot.format === 'carousel' && post.slides.length < 3) warn(`carousel has ${post.slides.length} slides`);
     for (const slide of post.slides) {
-      if (slide.layout === 'screen' && !slide.screen) problems.push(`slot ${post.slot} has a screen slide without a screen id`);
+      if (slide.layout === 'screen' && !slide.screen) block('has a screen slide without a screen id');
       if (slide.layout !== 'screen') slide.screen = '';
     }
+    const zenlotPost = post.pillar === 'product' || post.pillar === 'founder';
     const screenSlides = post.slides.filter((sl) => sl.layout === 'screen').length;
-    if (post.pillar !== 'product' && post.pillar !== 'founder' && screenSlides > 0)
-      problems.push(`slot ${post.slot} uses app screens but is not the product or founder post`);
-    if (post.pillar === 'founder' && screenSlides > 1) problems.push(`slot ${post.slot} founder post uses more than 1 screen`);
-    if (!slot.pillars.includes(post.pillar)) problems.push(`slot ${post.slot} (${slot.series}) must use pillar ${slot.pillars.join(' or ')}, not ${post.pillar}`);
+    if (!zenlotPost && screenSlides > 0) block('uses app screens but is not the product or founder post');
+    if (post.pillar === 'founder' && screenSlides > 1) warn('founder post uses more than 1 screen');
+    if (!slot.pillars.includes(post.pillar)) {
+      const why = `(${slot.series}) must use pillar ${slot.pillars.join(' or ')}, not ${post.pillar}`;
+      // A second Zenlot post breaks the one-a-week rule; any other pillar is only off-plan.
+      if (zenlotPost) block(why);
+      else warn(why);
+    }
     // Series name and cover kicker: repaired in place, so followers always see the same label per slot.
     const series = post.pillar === 'product' || post.pillar === 'founder' ? ZENLOT_SERIES[post.pillar] : slot.series;
     post.series = series;
     if (post.slides[0]) post.slides[0].kicker = series;
     const text = `${post.caption}\n${post.slides.map((sl) => [sl.title, sl.body, ...sl.items].join(' ')).join('\n')}`;
     const crossRef = CROSS_DAY_REF.exec(text);
-    if (crossRef) problems.push(`slot ${post.slot} refers to another post ("${crossRef[0]}"); posts must stand alone`);
+    if (crossRef) warn(`refers to another post ("${crossRef[0]}"); posts must stand alone`);
     if (!post.caption.includes('not financial advice')) {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
     }
@@ -321,19 +341,54 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[], minFollow = minFo
     if (post.ctaType === 'follow') post.caption = withFollowAsk(post.caption, series);
     // Swap unsupported maths symbols in place; anything still unrenderable or off-brand goes back to the model.
     // Also checks text fit, recomputes the maths and matches worked examples to app screens.
-    for (const issue of (await qaPost(post, { fix: true })).blocking) problems.push(`slot ${post.slot} ${issue}`);
+    if (post.slides.length) for (const issue of (await qaPost(post, { fix: true })).blocking) block(issue);
     post.hashtags = post.hashtags.map((t) => t.replace(/^#/, '').replace(/\s+/g, '')).slice(0, 5);
   }
-  for (let i = 0; i < slots.length; i++) if (!seen.has(i)) problems.push(`slot ${i} not filled`);
+  const missing = slots.flatMap((s, i) => (seen.has(i) ? [] : [`slot ${i} (${s.day}) not filled`]));
   const ctaCounts = new Map<string, number>();
   for (const p of plan.posts) ctaCounts.set(p.ctaType, (ctaCounts.get(p.ctaType) ?? 0) + 1);
-  for (const [cta, n] of ctaCounts) if (n > 2) problems.push(`${n} posts use the "${cta}" call to action; use each at most twice`);
-  if ((ctaCounts.get('follow') ?? 0) < minFollow) problems.push(`only ${ctaCounts.get('follow') ?? 0} post(s) ask people to follow; use "follow" on at least ${minFollow}`);
+  for (const [cta, n] of ctaCounts) if (n > 2) warnings.push(`${n} posts use the "${cta}" call to action; use each at most twice`);
+  if ((ctaCounts.get('follow') ?? 0) < minFollow) warnings.push(`only ${ctaCounts.get('follow') ?? 0} post(s) ask people to follow; use "follow" on at least ${minFollow}`);
   const scenario = plan.posts.some((p) => p.slides.some((sl) => /\bhypothetical\b/i.test(`${sl.kicker} ${sl.title} ${sl.body}`)));
-  if (!scenario) problems.push('no post is a hypothetical scenario labelled "Hypothetical" on a slide; include exactly one');
-  const zenlotPosts = plan.posts.filter((p) => p.pillar === 'product' || p.pillar === 'founder').length;
-  if (zenlotPosts > 1) problems.push(`${zenlotPosts} product/founder posts; the week must have at most one`);
-  return problems;
+  if (!scenario) warnings.push('no post is a hypothetical scenario labelled "Hypothetical" on a slide; include exactly one');
+  return { blocking, warnings, missing };
+}
+
+/** Every problem as one list, for the retry. */
+const allProblems = (plan: WeekPlan, c: PlanCheck): string[] => [
+  ...[...c.blocking].flatMap(([at, whys]) => whys.map((w) => `slot ${plan.posts[at].slot}: ${w}`)),
+  ...c.missing,
+  ...c.warnings,
+];
+
+/** Lower is better: posts that can go out matter far more than style. */
+const score = (c: PlanCheck): number => (c.blocking.size + c.missing.length) * 100 + c.warnings.length;
+
+export interface PlannedWeek {
+  theme: string;
+  /** One post per slot. `held` says why a post must not go out until someone fixes it. */
+  posts: Array<{ post: PlannedPost; held: string[] }>;
+  /** Anything else to know before approving the week. */
+  warnings: string[];
+}
+
+/** Turns a checked plan into a usable week: one post per slot, bad posts held. Throws only if no post could go out. */
+export function usableWeek(plan: WeekPlan, check: PlanCheck, slots: Slot[]): PlannedWeek {
+  const bySlot = new Map<number, { post: PlannedPost; held: string[] }>();
+  const warnings = [...check.missing, ...check.warnings];
+  for (const [at, post] of plan.posts.entries()) {
+    const held = check.blocking.get(at) ?? [];
+    if (!slots[post.slot] || post.slides.length === 0) {
+      warnings.push(`dropped "${post.topic}": ${held.join('; ')}`);
+      continue;
+    }
+    const other = bySlot.get(post.slot);
+    if (other) warnings.push(`slot ${post.slot} was filled twice; kept "${other.post.topic}", dropped "${post.topic}"`);
+    else bySlot.set(post.slot, { post, held });
+  }
+  const posts = [...bySlot.values()].sort((a, b) => a.post.slot - b.post.slot);
+  if (!posts.some((p) => p.held.length === 0)) throw new Error(`Week plan has no post that could be published: ${allProblems(plan, check).join('; ')}`);
+  return { theme: plan.theme, posts, warnings };
 }
 
 async function planWithClaude(prompt: string): Promise<WeekPlan> {
@@ -374,18 +429,37 @@ function plan(prompt: string): Promise<WeekPlan> {
   return runChain('planInstagramWeek', [{ name: 'anthropic', run: () => planWithClaude(prompt) }, ...backupPlanSteps(prompt)]);
 }
 
-export async function planWeek(ctx: PlanningContext): Promise<WeekPlan> {
-  const prompt = buildPrompt(ctx);
-  let result = await plan(prompt);
+/** The retry sees the plan it's correcting, so it fixes the problems instead of writing five new posts. */
+export function retryPrompt(prompt: string, plan: WeekPlan, problems: string[]): string {
+  return `${prompt}
 
+# Your previous plan
+${JSON.stringify(plan)}
+
+It has these problems:
+- ${problems.join('\n- ')}
+
+Return the whole week again. Fix every problem and leave everything else in the plan as it is.`;
+}
+
+export async function planWeek(ctx: PlanningContext, ask: (prompt: string) => Promise<WeekPlan> = plan): Promise<PlannedWeek> {
+  const prompt = buildPrompt(ctx);
   const minFollow = minFollowPosts(ctx.followers);
-  const problems = await checkPlan(result, ctx.slots, minFollow);
+  let best = await ask(prompt);
+  let check = await checkPlan(best, ctx.slots, minFollow);
+
+  const problems = allProblems(best, check);
   if (problems.length) {
-    // One repair attempt: tell the model exactly what was wrong.
     console.warn(`[Strategist] plan issues: ${problems.join('; ')} — asking for a corrected plan`);
-    result = await plan(`${prompt}\n\nYour previous plan had these problems, fix them:\n- ${problems.join('\n- ')}`);
-    const remaining = await checkPlan(result, ctx.slots, minFollow);
-    if (remaining.length) throw new Error(`Week plan still invalid: ${remaining.join('; ')}`);
+    try {
+      const fixed = await ask(retryPrompt(prompt, best, problems));
+      const fixedCheck = await checkPlan(fixed, ctx.slots, minFollow);
+      if (score(fixedCheck) <= score(check)) [best, check] = [fixed, fixedCheck];
+    } catch (err) {
+      console.warn(`[Strategist] correction failed, using the first plan: ${err instanceof Error ? err.message : err}`);
+    }
+    const left = allProblems(best, check);
+    if (left.length) console.warn(`[Strategist] still open: ${left.join('; ')}`);
   }
-  return result;
+  return usableWeek(best, check, ctx.slots);
 }

@@ -6,10 +6,10 @@ import {
   WEEKLY_SLOTS,
   isoWeekId,
   loadCalendar,
-  nextWeekMonday,
   recentPosts,
   saveCalendar,
   slotTime,
+  weekToPlan,
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
 import { FOLLOWER_GOAL, followerChange, latestFollowers, recordAccountDay } from '../instagram/account';
@@ -18,6 +18,7 @@ import { qaPost } from '../instagram/qa';
 import { markPreviewed } from '../instagram/approval';
 import { editLink, repoLink, esc, postSectionHtml, type Attachment } from '../instagram/preview';
 import { planWeek } from '../instagram/strategist';
+import { reportSent, markReportSent } from '../instagram/report-state';
 import type { CalendarPost, WeekCalendar } from '../instagram/types';
 
 // ---------------------------------------------------------------------------
@@ -26,9 +27,14 @@ import type { CalendarPost, WeekCalendar } from '../instagram/types';
 //   1. Pull fresh insights for recent posts (the "social media manager" loop)
 //   2. Ask the strategist (Claude Opus 5.5) to plan next week, informed by them
 //   3. Save the calendar to content/instagram/calendar/<week>.json
-//   4. Render every slide and email the team a full preview + last week's report
+//   4. Render every slide and email the team a full preview
+//
+// Last week's report is a separate email, sent before planning, so it arrives
+// even if planning fails or the week was planned by hand.
 //
 // Posts then auto-publish on schedule unless someone sets "status": "skipped".
+// A post that breaks a brand, maths or advice rule is saved as "skipped" with
+// the reason in "held"; the rest of the week goes ahead.
 //
 // Usage:
 //   npm run ig:plan                         # plan next week
@@ -88,9 +94,39 @@ function reportHtml(posts: CalendarPost[]): string {
 <tr style="background:#f2f4f7;text-align:left"><th>Day</th><th>Post</th><th>Age</th><th>Reach</th><th>Follows</th><th>Profile visits</th><th>Link taps</th><th>Saves</th><th>Shares</th><th>Likes</th><th>Comments</th></tr>${rows}</table>`;
 }
 
+/** Emails last week's results. Once per week: late duplicate runs find it already sent. Returns false if the email failed. */
+async function sendReport(weekMonday: Date, now: Date): Promise<boolean> {
+  const week = isoWeekId(weekMonday);
+  if (reportSent(week)) return true;
+  const lastMonday = new Date(weekMonday.getTime() - 7 * 86400_000);
+  const lastWeek = isoWeekId(lastMonday);
+  let growth = '';
+  if (instagramService.configured) {
+    try {
+      await recordAccountDay(now);
+    } catch (err) {
+      console.warn(`Could not record followers: ${err instanceof Error ? err.message : err}`);
+    }
+    growth = await growthHtml(now);
+  }
+  const ok = await emailService.sendHtml(
+    `[Zenlot IG] Results for ${lastWeek}`,
+    `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
+<h2>Instagram results for ${esc(lastWeek)}</h2>
+${growth}
+${reportHtml(loadCalendar(lastWeek)?.posts ?? [])}
+</div>`,
+    [],
+    path.join('out', 'instagram', lastWeek, 'report.html'),
+  );
+  if (ok && !env.DRY_RUN) markReportSent(week, now);
+  return ok;
+}
+
 async function main() {
+  const now = new Date();
   const force = process.argv.includes('--force');
-  const weekMonday = arg('week') ? mondayFromWeekId(arg('week')!) : nextWeekMonday();
+  const weekMonday = arg('week') ? mondayFromWeekId(arg('week')!) : weekToPlan(now, force);
   const week = isoWeekId(weekMonday);
   const weekEnd = new Date(weekMonday);
   weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
@@ -102,12 +138,21 @@ async function main() {
   //    planned, so the calendar keeps collecting reach/saves/shares every Sunday.
   await refreshInsights(4);
 
+  // 2. Last week's report, on the weekly run only (Sunday, or Monday if it was late). Never stops the planning.
+  if (!arg('week') && [0, 1].includes(now.getUTCDay())) {
+    try {
+      if (!(await sendReport(weekMonday, now))) throw new Error('the email was not sent');
+    } catch (err) {
+      console.error(`❌ Weekly report: ${err instanceof Error ? err.message : err}`);
+      process.exitCode = 1;
+    }
+  }
+
   if (loadCalendar(week) && !force) {
     console.log(`Calendar for ${week} already exists. Use --force to re-plan.`);
     return;
   }
   const history = recentPosts(6);
-  const lastWeek = recentPosts(1);
 
   let account = '';
   let followers = latestFollowers();
@@ -122,28 +167,29 @@ async function main() {
     }
   }
 
-  // 2. Plan
+  // 3. Plan
   console.log('🧠 Planning the week with the strategist...');
   const plan = await planWeek({ weekLabel, slots: WEEKLY_SLOTS, recentPosts: history, notes: process.env.IG_PLAN_NOTES, followers, weekStart: weekMonday });
 
-  // 3. Save calendar
+  // 4. Save calendar
   const calendar: WeekCalendar = {
     week,
     theme: plan.theme,
     generatedAt: new Date().toISOString(),
-    posts: plan.posts
-      .sort((a, b) => a.slot - b.slot)
-      .map(({ slot, ...post }) => {
-        const s = WEEKLY_SLOTS[slot];
-        return { id: `${week}-${s.day}`, scheduledAt: slotTime(weekMonday, s).toISOString(), status: 'scheduled' as const, ...post };
-      }),
+    posts: plan.posts.map(({ post: { slot, ...post }, held }) => {
+      const s = WEEKLY_SLOTS[slot];
+      const base = { id: `${week}-${s.day}`, scheduledAt: slotTime(weekMonday, s).toISOString() };
+      return held.length ? { ...base, status: 'skipped' as const, held, ...post } : { ...base, status: 'scheduled' as const, ...post };
+    }),
   };
+  const heldPosts = calendar.posts.filter((p) => p.held);
+  for (const p of heldPosts) console.warn(`✋ ${p.id} held: ${p.held!.join('; ')}`);
   // Saved before rendering so a render or email failure never loses the plan. Posts are marked as
   // previewed only once the email below has been sent; until then the publisher holds them.
   const file = saveCalendar(calendar);
   console.log(`💾 Saved ${path.relative(process.cwd(), file)} — theme: "${calendar.theme}"`);
 
-  // 4. Render + email preview
+  // 5. Render + email preview
   console.log('🎨 Rendering preview...');
   const attachments: Attachment[] = [];
   const sections: string[] = [];
@@ -153,7 +199,7 @@ async function main() {
       const fingerprint = await renderHash(post);
       const images = await renderPost(post.slides);
       const qa = await qaPost(post);
-      sections.push(postSectionHtml(post, images, attachments, qa.blocking));
+      sections.push(postSectionHtml(post, images, attachments, [...new Set([...(post.held ?? []), ...qa.blocking])]));
       fingerprints.set(post, fingerprint);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -162,16 +208,13 @@ async function main() {
     }
   }
 
-  let growth = '';
-  if (instagramService.configured) {
-    try {
-      await recordAccountDay();
-    } catch (err) {
-      console.warn(`Could not record followers: ${err instanceof Error ? err.message : err}`);
-    }
-    growth = await growthHtml(new Date());
-  }
   const edit = editLink(week);
+  const heldHtml = heldPosts.length
+    ? `<p style="background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:14px"><b>Held, won't publish:</b> ${heldPosts.map((p) => `<code>${esc(p.id)}</code>`).join(', ')}. The reason is on each post below. Fix it in the calendar file and set <code>"status"</code> to <code>"scheduled"</code>.</p>`
+    : '';
+  const warningsHtml = plan.warnings.length
+    ? `<div style="background:#fffbeb;border:1px solid #fde68a;padding:10px 12px;border-radius:8px;font-size:14px"><b>Worth a look</b> (these don't stop anything):<ul style="margin:6px 0 0">${plan.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>`
+    : '';
   const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:900px;color:#111">
 <h2 style="margin-bottom:4px">Instagram plan for ${esc(weekLabel)}</h2>
 <p style="margin-top:0;color:#445">Theme: <b>${esc(calendar.theme)}</b>${account ? ` · ${esc(account)}` : ''}</p>
@@ -180,14 +223,12 @@ These posts publish automatically at the times shown. To stop one, set its <code
 ${edit ? `in <a href="${edit}">the calendar file</a>` : `in <code>content/instagram/calendar/${week}.json</code>`}.
 You can also edit any slide text or caption there. If a post changes after this email, you'll get a new preview of it
 and it waits 3 hours before publishing.</p>
+${heldHtml}${warningsHtml}
 ${sections.join('\n')}
-<h2 style="margin-top:40px">Last week's performance</h2>
-${growth}
-${reportHtml(lastWeek)}
 </div>`;
 
   const ok = await emailService.sendHtml(
-    `[Zenlot IG] Plan for ${week}: ${calendar.theme}`,
+    `[Zenlot IG] ${heldPosts.length ? `⚠️ ${heldPosts.length} held · ` : ''}Plan for ${week}: ${calendar.theme}`,
     html,
     attachments,
     path.join('out', 'instagram', week, 'preview.html'),

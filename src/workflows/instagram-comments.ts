@@ -158,12 +158,14 @@ async function main() {
 <p style="margin-top:0;color:#445;font-size:14px">Nothing has been posted. Reply, hide or report in the Instagram app. Rules: docs/COMMUNITY.md.</p>
 ${items.map(itemHtml).join('\n')}</div>`;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  await emailService.sendHtml(
+  const ok = await emailService.sendHtml(
     `[Zenlot IG] ${urgent ? `⚠️ ${urgent} urgent · ` : ''}${items.length} new comment${items.length > 1 ? 's' : ''}`,
     html,
     [],
     path.join('out', 'instagram', `comments-${stamp}.html`),
   );
+
+  if (!ok) throw new Error('comment digest email was not sent; comments stay unseen and are retried next run');
 
   // Only mark comments as seen once a real email went out, so dry runs never swallow them.
   if (!env.DRY_RUN) {

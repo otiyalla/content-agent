@@ -132,7 +132,16 @@ export class InstagramService {
     }
 
     await this.waitForContainer(creationId);
-    const { id: mediaId } = await this.call<{ id: string }>('POST', `${env.IG_USER_ID}/media_publish`, { creation_id: creationId });
+    let mediaId: string;
+    try {
+      ({ id: mediaId } = await this.call<{ id: string }>('POST', `${env.IG_USER_ID}/media_publish`, { creation_id: creationId }));
+    } catch (err) {
+      // The post may be live even though the reply was lost or an error came back. Look before calling it failed.
+      const live = await this.findPublishedAfterError(caption);
+      if (!live) throw err;
+      console.warn(`  media_publish reported an error (${err instanceof Error ? err.message : err}) but the post is live`);
+      return live;
+    }
 
     let permalink: string | undefined;
     try {
@@ -141,6 +150,27 @@ export class InstagramService {
       // permalink is nice-to-have
     }
     return { mediaId, permalink };
+  }
+
+  /** A recent post with exactly this caption (ignoring whitespace), if there is one. */
+  async findPublished(caption: string): Promise<{ mediaId: string; permalink?: string; timestamp?: string } | null> {
+    const norm = (s: string) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
+    const wanted = norm(caption);
+    const hit = (await this.listRecentMedia(25)).find((m) => norm(m.caption ?? '') === wanted);
+    return hit ? { mediaId: hit.id, permalink: hit.permalink, timestamp: hit.timestamp } : null;
+  }
+
+  private async findPublishedAfterError(caption: string): Promise<{ mediaId: string; permalink?: string } | null> {
+    for (const wait of [5_000, 10_000, 20_000]) {
+      await sleep(wait);
+      try {
+        const live = await this.findPublished(caption);
+        if (live) return { mediaId: live.mediaId, permalink: live.permalink };
+      } catch {
+        // keep trying; the next run checks again before publishing
+      }
+    }
+    return null;
   }
 
   /**

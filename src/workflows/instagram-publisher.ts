@@ -8,8 +8,8 @@ import { refreshInsights } from '../instagram/insights';
 import { recordAccountDay } from '../instagram/account';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
-import { CHANGE_HOLD_MS, markPreviewed, previewMismatch } from '../instagram/approval';
-import { sendChangePreview } from '../instagram/preview';
+import { CHANGE_HOLD_MS, MAX_LATENESS_MS, canStillPublish, markPreviewed, previewMismatch } from '../instagram/approval';
+import { sendChangePreview, sendMissedNotice } from '../instagram/preview';
 import { renderReshareStory } from '../instagram/reshare-story';
 import type { CalendarPost } from '../instagram/types';
 
@@ -25,9 +25,6 @@ import type { CalendarPost } from '../instagram/types';
 //   DRY_RUN=true npm run ig:publish -- --now 2026-11-23T13:07:00Z
 // ---------------------------------------------------------------------------
 
-// A post that couldn't go out within this window is marked "missed" rather than
-// published late (a Monday post landing on Wednesday crowds the next one).
-const MAX_LATENESS_MS = 30 * 3600_000;
 const MAX_PUBLISHES_PER_RUN = 2;
 const MAX_ATTEMPTS = 3;
 
@@ -51,6 +48,16 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
       await renderReshareStory(images[0], label); // proves it renders
       console.log(`  [DRY RUN] would also post a "${label}" Story pointing at it`);
     }
+    return;
+  }
+
+  // Never trust the calendar alone: if an earlier run published this and its record was lost, take the live post.
+  const live = await instagramService.findPublished(caption);
+  if (live) {
+    post.status = 'published';
+    post.published = { mediaId: live.mediaId, permalink: live.permalink, publishedAt: live.timestamp ? new Date(live.timestamp).toISOString() : new Date().toISOString(), imageUrls: [] };
+    delete post.lastError;
+    console.warn(`  ⚠️  Already live at ${live.permalink ?? live.mediaId}; recorded it instead of publishing again (no Story posted)`);
     return;
   }
 
@@ -93,6 +100,11 @@ async function postReshareStory(week: string, post: CalendarPost, cover: Buffer)
 }
 
 function recordFailure(post: CalendarPost, err: unknown): void {
+  if (post.published) {
+    // Live posts are never downgraded: that would publish them again.
+    console.error(`  ❌ ${post.id}: ${err instanceof Error ? err.message : err} (already published)`);
+    return;
+  }
   post.attempts = (post.attempts ?? 0) + 1;
   post.lastError = err instanceof Error ? err.message : String(err);
   post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
@@ -152,6 +164,17 @@ async function main() {
       const mismatch = previewMismatch(post, fingerprint);
       if (mismatch) {
         const after = new Date(now.getTime() + CHANGE_HOLD_MS);
+        if (!canStillPublish(post, after)) {
+          console.log(`⏭  ${post.id}: ${mismatch}, and no run is left after a hold — marking missed`);
+          failures++;
+          if (!env.DRY_RUN) {
+            post.status = 'missed';
+            post.lastError = `${mismatch}; too late to preview and hold`;
+            changed = true;
+          }
+          if (!(await sendMissedNotice(week, post, mismatch))) console.error(`  ❌ notice email for ${post.id} was not sent`);
+          continue;
+        }
         console.log(`✋ ${post.id}: ${mismatch} — emailing a new preview; it publishes after ${after.toISOString()}`);
         try {
           await sendChangePreview(week, post, after, mismatch);
@@ -175,15 +198,23 @@ async function main() {
       console.log(`📮 ${post.id}: ${post.topic}`);
       try {
         await publishPost(week, post);
-        if (!env.DRY_RUN) {
-          published++;
-          // Save now: if anything later in this run crashes, this post must never be published again.
-          saveCalendar(cal);
-        }
       } catch (err) {
         failures++;
         changed = true;
         recordFailure(post, err);
+        continue;
+      }
+      if (!env.DRY_RUN) {
+        published++;
+        changed = true;
+        // Save now in case something later in this run crashes. If the save itself fails the post stays
+        // published in memory, is saved again below, and is never treated as a failed publish.
+        try {
+          saveCalendar(cal);
+        } catch (err) {
+          failures++;
+          console.error(`  ❌ ${post.id} is published but the calendar was not saved: ${err instanceof Error ? err.message : err}`);
+        }
       }
     }
 

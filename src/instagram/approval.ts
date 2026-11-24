@@ -14,6 +14,29 @@ import type { CalendarPost } from './types';
 
 export const CHANGE_HOLD_MS = 3 * 3600_000;
 
+// A post that couldn't go out within this window is marked "missed" rather than
+// published late (a Monday post landing on Wednesday crowds the next one).
+export const MAX_LATENESS_MS = 30 * 3600_000;
+
+// When the publisher runs, UTC. Keep in step with .github/workflows/instagram.yml and cron-trigger/.
+const RUN_HOURS = [13, 14, 18];
+const RUN_MINUTE = 7;
+
+/** The first publisher run at or after `t`. */
+export function nextPublishRun(t: Date): Date {
+  for (let day = 0; ; day++) {
+    for (const hour of RUN_HOURS) {
+      const run = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() + day, hour, RUN_MINUTE));
+      if (run >= t) return run;
+    }
+  }
+}
+
+/** Whether a post held until `after` still has a publisher run before it's too late to publish. */
+export function canStillPublish(post: Pick<CalendarPost, 'scheduledAt'>, after: Date): boolean {
+  return nextPublishRun(after).getTime() - Date.parse(post.scheduledAt) <= MAX_LATENESS_MS;
+}
+
 export function contentHash(post: Pick<CalendarPost, 'slides' | 'caption' | 'hashtags' | 'altText'>): string {
   const content = JSON.stringify({ slides: post.slides, caption: post.caption, hashtags: post.hashtags, altText: post.altText });
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 16);

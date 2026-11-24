@@ -64,7 +64,11 @@ jobs:
   instagram:
     runs-on: ubuntu-latest
     steps:
+      # The branch tip, not the commit this run was triggered at: a run that queued behind another
+      # must see what that one published.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-node@v4
         with:
@@ -140,8 +144,4 @@ jobs:
         run: |
           git config user.name "zenlot-content-agent"
           git config user.email "actions@users.noreply.github.com"
-          git add content/instagram
-          if git diff --cached --quiet; then echo "No calendar changes"; exit 0; fi
-          git commit -m "chore(instagram): ${{ steps.job.outputs.type }} $(date -u +%Y-%m-%dT%H:%MZ)"
-          git pull --rebase
-          git push
+          npx ts-node src/workflows/commit-state.ts "${{ steps.job.outputs.type }}" "$GITHUB_REF_NAME"

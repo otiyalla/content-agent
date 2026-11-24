@@ -1,5 +1,5 @@
 import { env } from '../config/env';
-import { CHANGE_HOLD_MS, markPreviewed, previewMismatch } from '../instagram/approval';
+import { CHANGE_HOLD_MS, canStillPublish, markPreviewed, previewMismatch } from '../instagram/approval';
 import { renderHash } from '../instagram/renderer';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { sendChangePreview } from '../instagram/preview';
@@ -10,8 +10,9 @@ import { sendChangePreview } from '../instagram/preview';
 // 3-hour veto window then starts now, so an early edit doesn't delay the post.
 //
 //   git pull
-//   npm run ig:repreview          # this week and next
-//   git commit -am "ig: re-preview" && git push   # the publisher reads the pushed calendar
+//   DRY_RUN=false npm run ig:repreview   # emails this week's and next week's changed posts
+//   git add content/instagram/calendar
+//   git commit -m "ig: re-preview" -- content/instagram/calendar && git push   # the publisher reads the pushed calendar
 //   DRY_RUN=true npm run ig:repreview   # write previews to out/ without emailing or saving
 // ---------------------------------------------------------------------------
 
@@ -30,6 +31,9 @@ async function main() {
         const mismatch = previewMismatch(post, fingerprint);
         if (!mismatch) continue;
         const after = new Date(Math.max(Date.parse(post.scheduledAt), now.getTime() + CHANGE_HOLD_MS));
+        if (!canStillPublish(post, after)) {
+          throw new Error(`too late to preview: no publisher run is left before its slot expires. Change its "scheduledAt" or set its "status" to "skipped"`);
+        }
         console.log(`✉️  ${post.id}: ${mismatch} — sending a preview now (publishes ${after.toISOString()})`);
         await sendChangePreview(week, post, after, mismatch);
         sent++;

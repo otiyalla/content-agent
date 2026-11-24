@@ -95,11 +95,10 @@ function reportHtml(posts: CalendarPost[]): string {
 }
 
 /** Emails last week's results. Once per week: late duplicate runs find it already sent. Returns false if the email failed. */
-async function sendReport(weekMonday: Date, now: Date): Promise<boolean> {
-  const week = isoWeekId(weekMonday);
-  if (reportSent(week)) return true;
-  const lastMonday = new Date(weekMonday.getTime() - 7 * 86400_000);
-  const lastWeek = isoWeekId(lastMonday);
+async function sendReport(now: Date): Promise<boolean> {
+  // The week just ending on a Sunday, or just ended on a Monday. Not the planned week: --force moves that.
+  const lastWeek = isoWeekId(new Date(now.getTime() - (now.getUTCDay() === 1 ? 86400_000 : 0)));
+  if (reportSent(lastWeek)) return true;
   let growth = '';
   if (instagramService.configured) {
     try {
@@ -119,7 +118,7 @@ ${reportHtml(loadCalendar(lastWeek)?.posts ?? [])}
     [],
     path.join('out', 'instagram', lastWeek, 'report.html'),
   );
-  if (ok && !env.DRY_RUN) markReportSent(week, now);
+  if (ok && !env.DRY_RUN) markReportSent(lastWeek, now);
   return ok;
 }
 
@@ -141,7 +140,7 @@ async function main() {
   // 2. Last week's report, on the weekly run only (Sunday, or Monday if it was late). Never stops the planning.
   if (!arg('week') && [0, 1].includes(now.getUTCDay())) {
     try {
-      if (!(await sendReport(weekMonday, now))) throw new Error('the email was not sent');
+      if (!(await sendReport(now))) throw new Error('the email was not sent');
     } catch (err) {
       console.error(`❌ Weekly report: ${err instanceof Error ? err.message : err}`);
       process.exitCode = 1;
@@ -149,7 +148,11 @@ async function main() {
   }
 
   if (loadCalendar(week) && !force) {
-    console.log(`Calendar for ${week} already exists. Use --force to re-plan.`);
+    console.log(
+      now.getUTCDay() === 1 && !arg('week')
+        ? `Calendar for ${week} (this week) already exists. On a Monday, --force plans next week; this week is never overwritten.`
+        : `Calendar for ${week} already exists. Use --force to re-plan.`,
+    );
     return;
   }
   const history = recentPosts(6);
@@ -200,17 +203,19 @@ async function main() {
       const images = await renderPost(post.slides);
       const qa = await qaPost(post);
       sections.push(postSectionHtml(post, images, attachments, [...new Set([...(post.held ?? []), ...qa.blocking])]));
-      fingerprints.set(post, fingerprint);
+      // Held posts aren't marked as previewed, so releasing one sends a fresh preview and waits 3 hours.
+      if (!post.held) fingerprints.set(post, fingerprint);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`  ❌ ${post.id} could not be rendered: ${message}`);
-      sections.push(`<p style="color:#991b1b"><b><code>${esc(post.id)}</code> could not be rendered and won't publish until fixed:</b> ${esc(message)}</p>`);
+      sections.push(`<p style="color:#991b1b"><b><code>${esc(post.id)}</code> could not be rendered and won't publish until fixed:</b> ${[...(post.held ?? []), message].map(esc).join('; ')}</p>`);
     }
   }
 
   const edit = editLink(week);
+  const ready = calendar.posts.length - heldPosts.length;
   const heldHtml = heldPosts.length
-    ? `<p style="background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:14px"><b>Held, won't publish:</b> ${heldPosts.map((p) => `<code>${esc(p.id)}</code>`).join(', ')}. The reason is on each post below. Fix it in the calendar file and set <code>"status"</code> to <code>"scheduled"</code>.</p>`
+    ? `<p style="background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;padding:10px 12px;border-radius:8px;font-size:14px"><b>Held, won't publish:</b> ${heldPosts.map((p) => `<code>${esc(p.id)}</code>`).join(', ')}. The reason is on each post below. Fix it in the calendar file and set <code>"status"</code> to <code>"scheduled"</code>; you'll get a fresh preview and it waits 3 hours.</p>`
     : '';
   const warningsHtml = plan.warnings.length
     ? `<div style="background:#fffbeb;border:1px solid #fde68a;padding:10px 12px;border-radius:8px;font-size:14px"><b>Worth a look</b> (these don't stop anything):<ul style="margin:6px 0 0">${plan.warnings.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></div>`
@@ -228,7 +233,7 @@ ${sections.join('\n')}
 </div>`;
 
   const ok = await emailService.sendHtml(
-    `[Zenlot IG] ${heldPosts.length ? `⚠️ ${heldPosts.length} held · ` : ''}Plan for ${week}: ${calendar.theme}`,
+    `[Zenlot IG] ${ready < WEEKLY_SLOTS.length ? `⚠️ ${ready} of ${WEEKLY_SLOTS.length} posts ready · ` : ''}Plan for ${week}: ${calendar.theme}`,
     html,
     attachments,
     path.join('out', 'instagram', week, 'preview.html'),
@@ -238,6 +243,10 @@ ${sections.join('\n')}
     const sentAt = new Date();
     for (const [post, fingerprint] of fingerprints) markPreviewed(post, fingerprint, sentAt);
     saveCalendar(calendar);
+  }
+  if (plan.missing.length) {
+    console.error(`❌ The week is incomplete: ${plan.missing.join('; ')}`);
+    process.exitCode = 1; // saved and emailed, but show it in GitHub Actions
   }
   console.log('✅ Planner done');
 }

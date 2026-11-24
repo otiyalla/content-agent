@@ -4,10 +4,10 @@ Plans, designs and publishes Zenlot's Instagram feed every week.
 
 ```
 Sunday 16:00 UTC ─ planner ──► pulls insights on recent posts (what got saved/shared)
+                              ► emails last week's report on its own, so it arrives even if planning fails
                               ► Claude Opus 5.5 plans 5 posts for next week
                               ► saves content/instagram/calendar/<week>.json (committed)
                               ► renders every slide, emails the full preview
-                              ► emails last week's report separately, even if planning fails
 
 Mon–Thu + Sat 13:07 ─ publisher ──► renders the post from the calendar JSON
                                        ► uploads JPEGs to Cloudflare R2
@@ -44,10 +44,10 @@ edit `content/instagram/calendar/<week>.json` on GitHub (the email links straigh
 | You want to | Do this |
 |---|---|
 | Stop a post | set `"status": "skipped"` |
-| Release a held post | the planner saves a post that breaks a brand, maths or advice rule as `skipped`, with the reason in `held`. Fix it, then set `"status": "scheduled"` |
+| Release a held post | the planner saves a post that breaks a brand, maths or advice rule as `skipped`, with the reason in `held`. Fix it, then set `"status": "scheduled"`. You'll get a fresh preview and it waits 3 hours |
 | Fix a typo / reword | edit `slides[].title`, `body`, `items`, or `caption`. You'll get a fresh preview email and the post waits 3 hours before publishing |
 | Move a post | change `scheduledAt` (ISO time, UTC) |
-| Steer next week | run the workflow manually with **notes**, e.g. "NFP is Friday" |
+| Steer next week | run the workflow manually with **notes**, e.g. "NFP is Friday". On a Monday also tick **force**: a Monday run otherwise means the week that has just begun, and force never overwrites that week |
 | Re-plan a week | run the workflow manually with **force** ticked |
 
 Use `**double asterisks**` in slide text to highlight words in teal.

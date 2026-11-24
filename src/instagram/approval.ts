@@ -22,8 +22,18 @@ export const MAX_LATENESS_MS = 30 * 3600_000;
 const RUN_HOURS = [13, 14, 18];
 const RUN_MINUTE = 7;
 
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** What's wrong with a post's scheduledAt, or null. A post with a bad time must never publish. */
+export function scheduleProblem(post: Pick<CalendarPost, 'scheduledAt'>): string | null {
+  const t: unknown = post.scheduledAt;
+  if (typeof t === 'string' && ISO_TIME.test(t) && !Number.isNaN(Date.parse(t))) return null;
+  return `scheduledAt ${JSON.stringify(t)} is not a valid time; write it like "2026-11-26T13:00:00.000Z"`;
+}
+
 /** The first publisher run at or after `t`. */
 export function nextPublishRun(t: Date): Date {
+  if (Number.isNaN(t.getTime())) throw new Error('nextPublishRun: invalid date');
   for (let day = 0; ; day++) {
     for (const hour of RUN_HOURS) {
       const run = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate() + day, hour, RUN_MINUTE));

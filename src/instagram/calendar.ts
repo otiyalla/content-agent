@@ -106,6 +106,11 @@ export function listWeeks(): string[] {
     .sort();
 }
 
+/** Instagram media IDs that the calendar's other posts already account for. */
+export function publishedMediaIds(exceptPostId: string): Set<string> {
+  return new Set(listWeeks().flatMap((w) => (loadCalendar(w)?.posts ?? []).flatMap((p) => (p.published && p.id !== exceptPostId ? [p.published.mediaId] : []))));
+}
+
 /** Posts from the most recent `n` weeks — used for de-duplication and performance feedback. */
 export function recentPosts(n: number): CalendarPost[] {
   return listWeeks()

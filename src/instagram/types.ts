@@ -122,6 +122,8 @@ export interface CalendarPost extends Omit<PlannedPost, 'slot'> {
   /** Fingerprint of the rendered slides as last previewed (see renderer.ts renderHash). */
   previewRenderHash?: string;
   previewedAt?: string;
+  /** Why the post was missed, while the email saying so still has to be sent. */
+  missedNotice?: string;
   published?: {
     mediaId: string;
     permalink?: string;

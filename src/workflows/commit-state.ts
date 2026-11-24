@@ -22,6 +22,7 @@ const RUN_FIELDS = new Set([
   'previewHash',
   'previewRenderHash',
   'previewedAt',
+  'missedNotice',
   'insights',
   'insightSnapshots',
 ]);
@@ -51,6 +52,13 @@ export function mergeJson(base: Json | undefined, run: Json | undefined, remote:
       const v = mergeJson(b[k], run[k], remote[k], k);
       if (v !== undefined) out[k] = v;
     }
+    // A person who set the status (say, back to "scheduled") also decides its failure count.
+    if (!same(b.status, remote.status) && run.status !== 'published' && same(out.status, remote.status)) {
+      for (const k of ['attempts', 'lastError', 'missedNotice']) {
+        if (remote[k] === undefined) delete out[k];
+        else out[k] = remote[k];
+      }
+    }
     return out;
   }
   if (Array.isArray(run) && Array.isArray(remote)) {
@@ -67,6 +75,20 @@ export function mergeJson(base: Json | undefined, run: Json | undefined, remote:
   return remote ?? run;
 }
 
+/**
+ * Merges one state file. A week this run planned afresh replaces the old plan whole (edits to the old
+ * plan don't apply to the new posts), except for a post that went out meanwhile.
+ */
+export function mergeFile(base: Json | undefined, run: Json | undefined, remote: Json | undefined): Json | undefined {
+  const replanned = isObj(run) && Array.isArray(run.posts) && !same(isObj(base) ? base.generatedAt : undefined, run.generatedAt);
+  if (!replanned || !isObj(run) || !isObj(remote) || !Array.isArray(remote.posts)) return mergeJson(base, run, remote);
+  console.log('This run planned the week afresh: its posts replace the edited ones (the edit is still in git history).');
+  const out = new Map((run.posts as Obj[]).map((p) => [p.id, p]));
+  for (const p of remote.posts as Obj[]) if (p.status === 'published') out.set(p.id, p);
+  return { ...run, posts: [...out.values()] };
+}
+
+const sleep = (ms: number) => void Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const git = (...args: string[]) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 const tryGit = (...args: string[]): boolean => {
   try {
@@ -90,7 +112,8 @@ function main() {
   git('commit', '-m', message);
 
   for (let i = 1; i <= MAX_TRIES; i++) {
-    git('fetch', 'origin', branch);
+    if (i > 1) sleep(2 ** i * 1000); // 4s, 8s, 16s, 32s
+    if (!tryGit('fetch', 'origin', branch)) continue;
     if (!tryGit('rebase', 'FETCH_HEAD')) {
       tryGit('rebase', '--abort');
       console.log('Someone edited the same lines; merging field by field.');
@@ -99,7 +122,7 @@ function main() {
       const merged = git('diff', '--name-only', `${run}~1`, run)
         .trim()
         .split('\n')
-        .map((file) => ({ file, value: mergeJson(show(`${run}~1`, file), show(run, file), show(remote, file)) }));
+        .map((file) => ({ file, value: mergeFile(show(`${run}~1`, file), show(run, file), show(remote, file)) }));
       git('reset', '--hard', remote);
       for (const { file, value } of merged) if (value !== undefined) fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
       git('add', 'content/instagram');

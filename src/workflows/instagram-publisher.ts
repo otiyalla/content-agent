@@ -1,14 +1,14 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
-import { instagramService } from '../services/social/instagram.service';
+import { LiveCheckError, instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
-import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
+import { isoWeekId, loadCalendar, publishedMediaIds, saveCalendar } from '../instagram/calendar';
 import { renderHash, renderPost } from '../instagram/renderer';
 import { refreshInsights } from '../instagram/insights';
 import { recordAccountDay } from '../instagram/account';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
-import { CHANGE_HOLD_MS, MAX_LATENESS_MS, canStillPublish, markPreviewed, previewMismatch } from '../instagram/approval';
+import { CHANGE_HOLD_MS, MAX_LATENESS_MS, canStillPublish, markPreviewed, previewMismatch, scheduleProblem } from '../instagram/approval';
 import { sendChangePreview, sendMissedNotice } from '../instagram/preview';
 import { renderReshareStory } from '../instagram/reshare-story';
 import type { CalendarPost } from '../instagram/types';
@@ -27,6 +27,7 @@ import type { CalendarPost } from '../instagram/types';
 
 const MAX_PUBLISHES_PER_RUN = 2;
 const MAX_ATTEMPTS = 3;
+const LIVE_MATCH_MS = 14 * 86400_000; // how far before its slot a live post can still be this one
 
 function hashtagsBlock(post: CalendarPost): string {
   return post.hashtags.length ? `\n\n${post.hashtags.map((t) => `#${t}`).join(' ')}` : '';
@@ -52,7 +53,9 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   }
 
   // Never trust the calendar alone: if an earlier run published this and its record was lost, take the live post.
-  const live = await instagramService.findPublished(caption);
+  // Posts the calendar already accounts for, or much older ones, are repeats of the same text, not this post.
+  const match = { since: new Date(Date.parse(post.scheduledAt) - LIVE_MATCH_MS), exclude: publishedMediaIds(post.id) };
+  const live = await instagramService.findPublished(caption, match);
   if (live) {
     post.status = 'published';
     post.published = { mediaId: live.mediaId, permalink: live.permalink, publishedAt: live.timestamp ? new Date(live.timestamp).toISOString() : new Date().toISOString(), imageUrls: [] };
@@ -68,7 +71,7 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   }
   console.log(`  Uploaded ${imageUrls.length} image(s) to R2`);
 
-  const { mediaId, permalink } = await instagramService.publish(imageUrls, caption, postAltTexts(post));
+  const { mediaId, permalink } = await instagramService.publish(imageUrls, caption, postAltTexts(post), match);
   post.status = 'published';
   post.published = { mediaId, permalink, publishedAt: new Date().toISOString(), imageUrls };
   delete post.lastError;
@@ -111,10 +114,22 @@ function recordFailure(post: CalendarPost, err: unknown): void {
   console.error(`  ❌ ${post.id}: ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
 }
 
+/** Emails that a post was missed. The reason stays on the post until the email goes out, so later runs retry. Returns true if the post changed. */
+async function notifyMissed(week: string, post: CalendarPost, reason = post.missedNotice ?? ''): Promise<boolean> {
+  if (!(await sendMissedNotice(week, post, reason))) {
+    console.error(`  ❌ notice email for ${post.id} was not sent; retried next run`);
+    return false;
+  }
+  if (env.DRY_RUN) return false;
+  delete post.missedNotice;
+  return true;
+}
+
 async function main() {
   // --now <ISO> lets you simulate a run at a specific time (useful with DRY_RUN).
   const nowArg = process.argv.indexOf('--now');
   const now = nowArg >= 0 ? new Date(process.argv[nowArg + 1]) : new Date();
+  if (Number.isNaN(now.getTime())) throw new Error('--now is not a valid time');
   console.log(`📤 Instagram publisher — ${now.toISOString()}${env.DRY_RUN ? ' [DRY RUN]' : ''}`);
 
   if (!env.DRY_RUN && (!instagramService.configured || !storageService.configured)) {
@@ -134,7 +149,14 @@ async function main() {
     let changed = false;
 
     for (const post of cal.posts) {
+      if (post.status === 'missed' && post.missedNotice && (await notifyMissed(week, post))) changed = true;
       if (post.status !== 'scheduled' && post.status !== 'failed') continue;
+      const problem = scheduleProblem(post);
+      if (problem) {
+        failures++;
+        console.error(`  ❌ ${post.id}: ${problem}. Not publishing it until that's fixed.`);
+        continue;
+      }
       const due = Date.parse(post.scheduledAt);
       if (due > now.getTime()) continue;
 
@@ -170,9 +192,10 @@ async function main() {
           if (!env.DRY_RUN) {
             post.status = 'missed';
             post.lastError = `${mismatch}; too late to preview and hold`;
+            post.missedNotice = mismatch;
             changed = true;
           }
-          if (!(await sendMissedNotice(week, post, mismatch))) console.error(`  ❌ notice email for ${post.id} was not sent`);
+          await notifyMissed(week, post, mismatch);
           continue;
         }
         console.log(`✋ ${post.id}: ${mismatch} — emailing a new preview; it publishes after ${after.toISOString()}`);
@@ -200,6 +223,11 @@ async function main() {
         await publishPost(week, post);
       } catch (err) {
         failures++;
+        if (err instanceof LiveCheckError) {
+          // Not a failed publish: the post stays due and the next run asks again before publishing.
+          console.error(`  ❌ ${post.id}: ${err.message}; retried next run`);
+          continue;
+        }
         changed = true;
         recordFailure(post, err);
         continue;

@@ -1,5 +1,5 @@
 import { env } from '../config/env';
-import { CHANGE_HOLD_MS, canStillPublish, markPreviewed, previewMismatch } from '../instagram/approval';
+import { CHANGE_HOLD_MS, canStillPublish, markPreviewed, previewMismatch, scheduleProblem } from '../instagram/approval';
 import { renderHash } from '../instagram/renderer';
 import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
 import { sendChangePreview } from '../instagram/preview';
@@ -27,6 +27,8 @@ async function main() {
     for (const post of cal.posts) {
       if (post.status !== 'scheduled' && post.status !== 'failed') continue;
       try {
+        const problem = scheduleProblem(post);
+        if (problem) throw new Error(problem);
         const fingerprint = await renderHash(post);
         const mismatch = previewMismatch(post, fingerprint);
         if (!mismatch) continue;

@@ -22,12 +22,11 @@ the disclaimer visible.
 
 Set the link to **`https://info.zenlot.net/ig`**. It's the page from the `zenlot-info.github.io` repo (`ig/index.html`).
 
-- **Google Play** installs are tagged `utm_source=instagram`, `utm_campaign=ig_<ISO week>` (for example
-  `ig_2026-W48`) and `utm_content=bio`. You'll see them in Play Console → Statistics → Acquisition. The
-  week changes automatically, so the bio never needs editing.
-- **App Store** campaigns need your provider token. In App Store Connect → App Analytics → Acquisition →
-  Campaigns → *Generate a campaign link*, copy the `pt=` number into `APP_STORE_PT` in `ig/index.html`.
-  Until then the App Store button works but isn't counted.
+- **Google Play** installs are tagged `utm_source=instagram`, `utm_campaign=instagram` and `utm_content=bio`. You'll
+  see them in Play Console → Statistics → Acquisition. The campaign name is fixed: one per week split small numbers
+  until the stores hid them. (Installs before this change are under `ig_<ISO week>`.)
+- **App Store** installs are under campaign `instagram` in App Analytics → Acquisition → Campaigns. The provider token
+  is set in `assets/install-links.js`. Apple can't show which post.
 - To tag one post (for example a Story link sticker), link to `https://info.zenlot.net/ig?p=2026-W48-sat`.
 
 ## 3. Highlights
@@ -58,6 +57,6 @@ Review the pins once a month against saves and follows.
 Use the same safety line and link everywhere, so followers can tell the real accounts apart:
 
 - **X bio:** `Free forex trading journal for iOS & Android. We never DM you for money. Not financial advice.`
-  Link: `https://info.zenlot.net/ig`
+  Link: `https://info.zenlot.net/x` (campaign `x`). Not `/ig`: that counts X visitors as Instagram.
 - **Reddit profile** (`u/` of the agent account): `Founder of Zenlot, a free forex trading journal. I never DM for money.`
 - Each profile links to the other two: Instagram ↔ X ↔ Reddit.

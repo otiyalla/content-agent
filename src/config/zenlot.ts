@@ -9,7 +9,7 @@ export const ZENLOT_LINKS = {
   appStore: 'https://apps.apple.com/us/app/zenlot/id6759946394',
   googlePlay: 'https://play.google.com/store/apps/details?id=com.zenlot.app',
   instagram: 'https://www.instagram.com/zenlot_app/',
-  // Link in the Instagram bio (zenlot-info.github.io/ig): tags store installs with ig_<ISO week>.
+  // Link in the Instagram bio (zenlot-info.github.io/ig): tags store installs with the fixed campaign "instagram".
   instagramBio: 'https://info.zenlot.net/ig',
 } as const;
 

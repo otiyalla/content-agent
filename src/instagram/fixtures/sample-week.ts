@@ -7,6 +7,7 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     slot: 0,
     pillar: 'risk-math',
     topic: 'Why losses are asymmetric',
+    topicId: 'drawdown',
     slides: [
       { layout: 'cover', kicker: 'Risk math', title: 'Losing 50% needs a **100%** gain to recover', body: 'The maths of drawdowns, and why protecting capital beats chasing returns.', stat: '', items: [], screen: '' },
       { layout: 'stat', kicker: '', title: 'Lose 10%, you need +11%', body: 'Small drawdowns are easy to climb out of.', stat: '-10%', items: [], screen: '' },
@@ -27,6 +28,7 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     slot: 1,
     pillar: 'process',
     topic: 'Pre-trade checklist',
+    topicId: 'trade-planning',
     slides: [
       { layout: 'list', kicker: 'Pre-trade checklist', title: 'Before you click **buy**, answer these', body: '', stat: '', items: ['Where is my stop loss, exactly?', 'How much am I risking in money, not pips?', 'Is my reward at least 2x my risk?', 'Am I trading my plan, or my last loss?', 'Have I logged this setup in my journal?'], screen: '' },
     ],
@@ -42,6 +44,7 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     slot: 2,
     pillar: 'myth-busting',
     topic: 'Win rate myth',
+    topicId: 'risk-reward',
     slides: [
       { layout: 'mythfact', kicker: 'Myth vs fact', title: 'A high win rate means you are a profitable trader.', body: 'A 70% win rate loses money if your average loss is **3x** your average win. Track expectancy, not win rate.', stat: '', items: [], screen: '' },
     ],
@@ -57,6 +60,7 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     slot: 3,
     pillar: 'psychology',
     topic: 'Revenge trading quote',
+    topicId: 'discipline',
     slides: [
       { layout: 'quote', kicker: 'Psychology', title: 'The trade after a loss is the **most expensive** trade you will take.', body: 'Step away for 15 minutes', stat: '', items: [], screen: '' },
     ],
@@ -72,6 +76,7 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     slot: 4,
     pillar: 'community',
     topic: 'Engagement question',
+    topicId: 'discipline',
     slides: [
       { layout: 'question', kicker: 'Your turn', title: 'What do you risk per trade?', body: '', stat: '', items: ['Under 1%', '1 to 2%', '3 to 5%', 'I do not track it'], screen: '' },
     ],
@@ -87,6 +92,7 @@ export const SAMPLE_POSTS: PlannedPost[] = [
     slot: 2,
     pillar: 'product',
     topic: 'Zenlot product tour with real screens',
+    topicId: 'zenlot',
     slides: [
       { layout: 'cover', kicker: 'Inside Zenlot', title: 'Your journal should **catch** what you miss', body: 'Three screens that turn trades into a routine.', stat: '', items: [], screen: '' },
       { layout: 'screen', kicker: 'Set limits', title: 'Decide your risk **once**', body: 'Max risk per trade, daily and weekly drawdown limits.', stat: '', items: [], screen: 'risk-profile' },

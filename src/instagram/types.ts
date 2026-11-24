@@ -1,5 +1,6 @@
 import * as z from 'zod/v4';
 import { SCREEN_IDS } from './screens';
+import { TOPIC_IDS, type TopicId } from './taxonomy';
 
 // ---------------------------------------------------------------------------
 // Content model for Instagram posts.
@@ -65,6 +66,7 @@ export const PlannedPostSchema = z.object({
   slot: z.number().int().describe('Index of the posting slot this post fills (0-based, from the slots provided).'),
   pillar: z.enum(PILLARS),
   topic: z.string().describe('One-line internal description of the post.'),
+  topicId: z.enum(TOPIC_IDS).describe('The closest topic from the topic list.'),
   slides: z.array(SlideSchema).describe('1 slide for a single image; 3-8 slides for a carousel.'),
   caption: z.string().describe('Full Instagram caption. First line is the hook. Plain text, line breaks allowed, no hashtags here.'),
   hashtags: z.array(z.string()).describe('3-5 targeted hashtags without the # symbol.'),
@@ -111,7 +113,11 @@ export interface PostInsights {
   linkTaps?: number; // taps on the link in bio after viewing this post
 }
 
-export interface CalendarPost extends Omit<PlannedPost, 'slot'> {
+export interface CalendarPost extends Omit<PlannedPost, 'slot' | 'topicId'> {
+  /** From taxonomy.ts. Weeks planned before 2026-W49 don't have it. */
+  topicId?: TopicId;
+  /** Opaque id of the reader-question brief this post answers, if any (brief.ts). */
+  briefId?: string;
   id: string; // e.g. "2026-W48-mon"
   scheduledAt: string; // ISO timestamp (UTC)
   status: PostStatus;

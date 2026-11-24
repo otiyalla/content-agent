@@ -61,6 +61,8 @@ Fill in `content/go-live.json` on `main`:
 2. Settings → Secrets and variables → Actions → Variables → `IG_LIVE` = `true`.
 3. The next publisher run (13:07, 14:07 or 18:07 UTC) posts whatever is due.
 
+Going away? Set `OWNER_AWAY` to `true` instead ([INCIDENTS.md](INCIDENTS.md)).
+
 To stop everything, delete the variable or set it to anything other than `true`.
 
 ## Editing a post after the Sunday preview

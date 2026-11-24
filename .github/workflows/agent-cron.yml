@@ -43,6 +43,9 @@ concurrency:
   group: agents # runs share the draft queue; never write it at the same time
   cancel-in-progress: false
 
+env:
+  OWNER_AWAY: ${{ vars.OWNER_AWAY }} # "true" = nothing posts and no drafts are sent
+
 jobs:
   run-agent:
     runs-on: ubuntu-latest

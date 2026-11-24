@@ -13,6 +13,8 @@ import {
 } from '../instagram/calendar';
 import { refreshInsights } from '../instagram/insights';
 import { FOLLOWER_GOAL, followerChange, latestFollowers, recordAccountDay } from '../instagram/account';
+import { recordAccountWeek } from '../instagram/account-metrics';
+import { readBrief, safeField } from '../instagram/brief';
 import { renderHash, renderPost } from '../instagram/renderer';
 import { qaPost } from '../instagram/qa';
 import { markPreviewed } from '../instagram/approval';
@@ -41,6 +43,7 @@ import type { CalendarPost, WeekCalendar } from '../instagram/types';
 //   npm run ig:plan -- --week 2026-W48      # plan a specific week
 //   npm run ig:plan -- --force              # overwrite an existing plan
 //   IG_PLAN_NOTES="NFP is Friday" npm run ig:plan
+//   IG_PLAN_NOTES="[brief:q07 slot:mon] ..."   # lead one post with a reader question (docs/RADAR-PILOT.md)
 // ---------------------------------------------------------------------------
 
 function arg(name: string): string | undefined {
@@ -64,7 +67,8 @@ async function growthHtml(now: Date): Promise<string> {
   let activity = '';
   try {
     const a = await instagramService.getAccountInsights(new Date(now.getTime() - 7 * 86400_000), now);
-    activity = ` · last 7 days: <b>${a.profileViews ?? '–'}</b> profile views, <b>${a.linkTaps ?? '–'}</b> link-in-bio taps, reach ${a.reach ?? '–'}`;
+    if (!env.DRY_RUN) recordAccountWeek(a, now);
+    activity = ` · last 7 days: <b>${a.profileViews ?? '–'}</b> profile views, <b>${a.websiteClicks ?? '–'}</b> link-in-bio taps, reach ${a.reach ?? '–'}`;
   } catch (err) {
     console.warn(`Could not fetch account insights: ${err instanceof Error ? err.message : err}`);
   }
@@ -155,6 +159,8 @@ async function main() {
     );
     return;
   }
+  // Checked before anything is spent: notes appear in public logs and steer public plans.
+  const brief = readBrief(process.env.IG_PLAN_NOTES, WEEKLY_SLOTS);
   const history = recentPosts(6);
 
   let account = '';
@@ -174,14 +180,21 @@ async function main() {
   console.log('🧠 Planning the week with the strategist...');
   const plan = await planWeek({ weekLabel, slots: WEEKLY_SLOTS, recentPosts: history, notes: process.env.IG_PLAN_NOTES, followers, weekStart: weekMonday });
 
-  // 4. Save calendar
+  // 4. Save calendar. The file is public, so planning fields that would leak are replaced (never the post itself).
+  const scrub = (where: string, text: string, fallback: string) => {
+    const safe = safeField(text, fallback);
+    if (safe.problems.length) plan.warnings.push(`${where} was replaced: it ${safe.problems.join('; ')}`);
+    return safe.text;
+  };
   const calendar: WeekCalendar = {
     week,
-    theme: plan.theme,
+    theme: scrub('theme', plan.theme, 'Weekly plan'),
     generatedAt: new Date().toISOString(),
     posts: plan.posts.map(({ post: { slot, ...post }, held }) => {
       const s = WEEKLY_SLOTS[slot];
-      const base = { id: `${week}-${s.day}`, scheduledAt: slotTime(weekMonday, s).toISOString() };
+      post.topic = scrub(`${s.day} topic`, post.topic, `${s.series}: ${post.slides[0]?.title.replace(/\*\*/g, '') ?? ''}`);
+      post.rationale = scrub(`${s.day} rationale`, post.rationale, '');
+      const base = { id: `${week}-${s.day}`, scheduledAt: slotTime(weekMonday, s).toISOString(), ...(brief?.day === s.day ? { briefId: brief.id } : {}) };
       return held.length ? { ...base, status: 'skipped' as const, held, ...post } : { ...base, status: 'scheduled' as const, ...post };
     }),
   };

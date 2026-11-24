@@ -29,9 +29,11 @@ export class EmailService {
     html: string,
     attachments: Array<{ filename: string; content: Buffer; cid?: string }> = [],
     dryRunPath?: string,
+    /** Extra recipients. Never printed: logs are public. */
+    extraTo: string[] = [],
   ): Promise<boolean> {
     if (!this.transporter || env.DRY_RUN) {
-      console.log(`[DRY RUN - Email] To: ${env.EMAIL_TO} | Subject: ${subject} | ${attachments.length} attachment(s)`);
+      console.log(`[DRY RUN - Email] To: ${env.EMAIL_TO} | Subject: ${subject} | ${attachments.length} attachment(s)${extraTo.length ? ` | +${extraTo.length} more recipient(s)` : ''}`);
       if (dryRunPath) {
         // Rewrite cid: references to the local file names so the preview opens in a browser.
         const fs = await import('fs');
@@ -51,11 +53,12 @@ export class EmailService {
     }
 
     try {
-      await this.transporter.sendMail({ from: env.EMAIL_FROM, to: env.EMAIL_TO, subject, html, attachments });
-      console.log(`✅ Email "${subject}" sent to ${env.EMAIL_TO}`);
+      await this.transporter.sendMail({ from: env.EMAIL_FROM, to: [env.EMAIL_TO, ...extraTo].join(', '), subject, html, attachments });
+      console.log(`✅ Email "${subject}" sent`);
       return true;
     } catch (error) {
-      console.error(`Error sending email "${subject}":`, error);
+      // SMTP errors can list the rejected addresses, so only the code is printed.
+      console.error(`Error sending email "${subject}": ${(error as { code?: string }).code ?? 'unknown error'}`);
       return false;
     }
   }

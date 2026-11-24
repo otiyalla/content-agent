@@ -179,6 +179,11 @@ function checkPipes(c: Confirmations) {
   if (env.SMTP_USER && env.SMTP_PASS) add('PASS', 'Email', `Preview and approval emails go to ${env.EMAIL_TO}`);
   else add('FAIL', 'Email', 'SMTP not configured, so nobody would see previews, change notices or X/Reddit drafts');
 
+  if (env.OWNER_AWAY && !env.SAFETY_BACKUP_EMAIL) add('FAIL', 'Safety', 'OWNER_AWAY is on but SAFETY_BACKUP_EMAIL is not set, so nobody else gets urgent comments (docs/INCIDENTS.md)');
+  else if (env.OWNER_AWAY) add('WARN', 'Safety', 'OWNER_AWAY is on: posts that come due are skipped until it is turned off');
+  else if (!env.SAFETY_BACKUP_EMAIL) add('WARN', 'Safety', 'SAFETY_BACKUP_EMAIL is not set; add it before going away (docs/INCIDENTS.md)');
+  else add('PASS', 'Safety', 'A backup gets urgent comments while you are away');
+
   const recipients = env.EMAIL_TO.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
   if (c.backupApprover || recipients.length > 1) add('PASS', 'Approval', `Backup approver: ${c.backupApprover || recipients.slice(1).join(', ')}`);
   else add('TODO', 'Approval', 'Only one person gets the previews. Name a backup approver (backupApprover in content/go-live.json, or add them to EMAIL_TO)');

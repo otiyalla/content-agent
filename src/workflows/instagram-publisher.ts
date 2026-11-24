@@ -10,6 +10,7 @@ import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
 import { CHANGE_HOLD_MS, MAX_LATENESS_MS, canStillPublish, markPreviewed, previewMismatch, scheduleProblem } from '../instagram/approval';
 import { sendChangePreview, sendMissedNotice } from '../instagram/preview';
+import { AWAY_REASON, skipWhileAway } from '../instagram/away';
 import { renderReshareStory } from '../instagram/reshare-story';
 import type { CalendarPost } from '../instagram/types';
 
@@ -151,6 +152,11 @@ async function main() {
     for (const post of cal.posts) {
       if (post.status === 'missed' && post.missedNotice && (await notifyMissed(week, post))) changed = true;
       if (post.status !== 'scheduled' && post.status !== 'failed') continue;
+      if (skipWhileAway(post, now, env.OWNER_AWAY)) {
+        console.log(`🌙 ${post.id}: ${AWAY_REASON}`);
+        changed = true;
+        continue;
+      }
       const problem = scheduleProblem(post);
       if (problem) {
         failures++;

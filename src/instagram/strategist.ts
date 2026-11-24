@@ -7,6 +7,7 @@ import { ZENLOT_PRODUCT } from '../config/zenlot';
 import { screensForPrompt } from './screens';
 import { qaPost } from './qa';
 import { WeekPlanSchema, type WeekPlan, type CalendarPost } from './types';
+import { minFollowPosts } from './account';
 import { ZENLOT_SERIES, type Slot } from './calendar';
 import { seasonalNotes } from './seasonal';
 
@@ -96,8 +97,7 @@ Use "question" at most once per week.
 
 # Tags (used to learn what works; tag honestly)
 - hookType: the kind of opening the cover and caption line 1 use (stat, myth, question, mistake, story, how-to, checklist, contrarian).
-- ctaType: the main call to action (save, share, comment, follow, link). The account is new, so growth means follows:
-  use "follow" (e.g. "Follow for more risk maths") on at least 2 of the week's posts.
+- ctaType: the main call to action (save, share, comment, follow, link).
 - series: the recurring series name if the post belongs to one, else "".
 
 # Captions
@@ -114,6 +114,7 @@ export interface PlanningContext {
   slots: Slot[];
   recentPosts: CalendarPost[]; // previous weeks, for de-duplication and learning
   notes?: string; // optional steer from a human, e.g. "focus on NFP week"
+  followers?: number; // current follower count; below FOLLOWER_GOAL the week must ask for follows
   weekStart?: Date; // Monday of the planned week, for seasonal moments
 }
 
@@ -188,6 +189,19 @@ export function performanceSummary(posts: CalendarPost[]): string {
   ].join('\n');
 }
 
+function followRule(min: number): string {
+  const how = 'A "follow" post names its series in the caption\'s ask ("Follow for more Survival Maths"), so people know what they get.';
+  return min ? `The account is new, so at least ${min} posts use "follow". ${how}` : `"follow" is optional. ${how}`;
+}
+
+/** "Follow … <series>" in one sentence: a follow ask that says what following gets you. */
+export function asksToFollow(text: string, series: string): boolean {
+  const plain = (s: string) => s.replace(/\*\*/g, '').replace(/[’]/g, "'").toLowerCase();
+  return plain(text)
+    .split(/[.!?\n]/)
+    .some((sentence) => /\bfollow\b/.test(sentence) && sentence.includes(plain(series)));
+}
+
 function buildPrompt(ctx: PlanningContext): string {
   const slotLines = ctx.slots
     .map((s, i) => `  slot ${i}: ${s.day.toUpperCase()} ${s.hourUtc}:00 UTC — ${s.format} — series "${s.series}" — pillar ${s.pillars.join(' or ')}. ${s.brief}`)
@@ -223,8 +237,8 @@ Instagram re-shows carousels to people who skipped them, starting from slide 2. 
 that makes sense on its own: a complete, striking statement or number, not a continuation of the cover.
 
 # Calls to action
-Rotate them. Across the week no ctaType is used more than twice, and at least 2 posts use "follow"
-(e.g. "Follow for more Survival Maths"). Don't end every caption with "save this / share it with the friend who".
+Rotate them. Across the week no ctaType is used more than twice. ${followRule(minFollowPosts(ctx.followers))}
+Don't end every caption with "save this / share it with the friend who".
 
 # Stand-alone posts
 Any post can be skipped or published late, so never refer to another post ("as Monday's maths showed",
@@ -254,7 +268,7 @@ const CROSS_DAY_REF =
   /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)['’]s\s+(?:post|maths?|lesson|carousel|checklist|slide|numbers|example)|\byesterday['’]?s?\s+post|\bearlier this week\b|\b(?:last|previous|our last)\s+post\b/i;
 
 /** Validates structural rules the schema can't express, and repairs what it safely can. */
-export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]> {
+export async function checkPlan(plan: WeekPlan, slots: Slot[], minFollow = minFollowPosts(undefined)): Promise<string[]> {
   const problems: string[] = [];
   const seen = new Set<number>();
   for (const post of plan.posts) {
@@ -281,6 +295,8 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]
     const series = post.pillar === 'product' || post.pillar === 'founder' ? ZENLOT_SERIES[post.pillar] : slot.series;
     post.series = series;
     if (post.slides[0]) post.slides[0].kicker = series;
+    if (post.ctaType === 'follow' && !asksToFollow(post.caption, series))
+      problems.push(`slot ${post.slot} uses "follow" but its caption never says "Follow … ${series}"`);
     const text = `${post.caption}\n${post.slides.map((sl) => [sl.title, sl.body, ...sl.items].join(' ')).join('\n')}`;
     const crossRef = CROSS_DAY_REF.exec(text);
     if (crossRef) problems.push(`slot ${post.slot} refers to another post ("${crossRef[0]}"); posts must stand alone`);
@@ -296,7 +312,7 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<string[]
   const ctaCounts = new Map<string, number>();
   for (const p of plan.posts) ctaCounts.set(p.ctaType, (ctaCounts.get(p.ctaType) ?? 0) + 1);
   for (const [cta, n] of ctaCounts) if (n > 2) problems.push(`${n} posts use the "${cta}" call to action; use each at most twice`);
-  if ((ctaCounts.get('follow') ?? 0) < 2) problems.push(`only ${ctaCounts.get('follow') ?? 0} post(s) ask people to follow; use "follow" on at least 2`);
+  if ((ctaCounts.get('follow') ?? 0) < minFollow) problems.push(`only ${ctaCounts.get('follow') ?? 0} post(s) ask people to follow; use "follow" on at least ${minFollow}`);
   const scenario = plan.posts.some((p) => p.slides.some((sl) => /\bhypothetical\b/i.test(`${sl.kicker} ${sl.title} ${sl.body}`)));
   if (!scenario) problems.push('no post is a hypothetical scenario labelled "Hypothetical" on a slide; include exactly one');
   const zenlotPosts = plan.posts.filter((p) => p.pillar === 'product' || p.pillar === 'founder').length;
@@ -346,12 +362,13 @@ export async function planWeek(ctx: PlanningContext): Promise<WeekPlan> {
   const prompt = buildPrompt(ctx);
   let result = await plan(prompt);
 
-  const problems = await checkPlan(result, ctx.slots);
+  const minFollow = minFollowPosts(ctx.followers);
+  const problems = await checkPlan(result, ctx.slots, minFollow);
   if (problems.length) {
     // One repair attempt: tell the model exactly what was wrong.
     console.warn(`[Strategist] plan issues: ${problems.join('; ')} — asking for a corrected plan`);
     result = await plan(`${prompt}\n\nYour previous plan had these problems, fix them:\n- ${problems.join('\n- ')}`);
-    const remaining = await checkPlan(result, ctx.slots);
+    const remaining = await checkPlan(result, ctx.slots, minFollow);
     if (remaining.length) throw new Error(`Week plan still invalid: ${remaining.join('; ')}`);
   }
   return result;

@@ -246,7 +246,7 @@
           "screen": ""
         }
       ],
-      "caption": "A 70% win rate can lose money. Steadily.\n\nExpectancy is what matters: (win rate × average win) − (loss rate × average loss).\n\nIn this illustrative example, 70% of trades win 0.5R and 30% lose 1.5R. That's 0.35R − 0.45R = −0.1R per trade. Over 100 trades, roughly −10R. It feels good almost every day and still drains the account.\n\nThe extra insight: high win rates often come from habits that hide risk. Taking profit early, then widening or removing the stop on losers so they \"have room to come back.\" The win rate climbs while the average loss quietly grows.\n\nThat's why tracking only wins and losses misleads you. Log the R of every trade, and your real numbers show up within weeks.\n\nSave this, and share it with the friend who's proud of their 80% hit rate.\n\nEducational content, not financial advice.",
+      "caption": "A 70% win rate can lose money. Steadily.\n\nExpectancy is what matters: (win rate × average win) − (loss rate × average loss).\n\nIn this illustrative example, 70% of trades win 0.5R and 30% lose 1.5R. That's 0.35R − 0.45R = −0.1R per trade. Over 100 trades, roughly −10R. It feels good almost every day and still drains the account.\n\nThe extra insight: high win rates often come from habits that hide risk. Taking profit early, then widening or removing the stop on losers so they \"have room to come back.\" The win rate climbs while the average loss quietly grows.\n\nThat's why tracking only wins and losses misleads you. Log the R of every trade, and your real numbers show up within weeks.\n\nFollow @zenlot_app for more trading maths, with the working shown.\n\nEducational content, not financial advice.",
       "hashtags": [
         "tradingmyths",
         "forextrading",
@@ -256,7 +256,7 @@
       ],
       "altText": "Myth versus fact slide. Myth: A high win rate means a profitable strategy. Fact: Win 70% at plus 0.5R and lose 30% at minus 1.5R and expectancy is minus 0.1R per trade.",
       "hookType": "myth",
-      "ctaType": "share",
+      "ctaType": "follow",
       "series": "",
       "rationale": "Myth-vs-fact singles are shareable because they challenge a belief many beginners hold. With a fresh account, this also tests a contrarian single against Tuesday's checklist. It builds on Wednesday's expectancy maths from the opposite direction (a low win rate can win, a high one can lose), using fully shown arithmetic. It also adds a third single-image layout to the grid.",
       "previewHash": "39f30caaa21e5ae5",
@@ -325,7 +325,7 @@
           "screen": ""
         }
       ],
-      "caption": "Trading the same lot size every time feels consistent. It isn't.\n\nYour risk is lot size × stop distance × pip value. Keep the lots fixed and your risk swings with every stop you place. On a USD 5,000 account trading EURUSD, 0.5 lots can mean 2.5% risk on one trade and 6% on the next.\n\nThe fix is to reverse the order: decide the risk, place the stop where the trade is invalid, then calculate the size.\n\nThe extra insight: fixed-% sizing also protects you in drawdowns. As the account shrinks, 1% becomes a smaller dollar amount, so your position size shrinks automatically. That slows the slide, which, as Monday's maths showed, makes recovery far easier.\n\nPip values vary by pair and account currency, so check yours. Or let Zenlot calculate it before every entry. Link in bio.\n\nSave the formula, and share it with a friend who trades \"the usual size.\"\n\nEducational content, not financial advice.",
+      "caption": "Trading the same lot size every time feels consistent. It isn't.\n\nYour risk is lot size × stop distance × pip value. Keep the lots fixed and your risk swings with every stop you place. On a USD 5,000 account trading EURUSD, 0.5 lots can mean 2.5% risk on one trade and 6% on the next.\n\nThe fix is to reverse the order: decide the risk, place the stop where the trade is invalid, then calculate the size.\n\nThe extra insight: fixed-% sizing also protects you in drawdowns. As the account shrinks, 1% becomes a smaller dollar amount, so your position size shrinks automatically. That slows the slide, which, as Monday's maths showed, makes recovery far easier.\n\nPip values vary by pair and account currency, so check yours. Or let Zenlot calculate it before every entry. Link in bio.\n\nSave the formula, and follow @zenlot_app for more worked examples.\n\nEducational content, not financial advice.",
       "hashtags": [
         "positionsizing",
         "riskmanagement",

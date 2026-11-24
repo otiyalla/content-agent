@@ -43,6 +43,20 @@ export async function recordAccountDay(now: Date = new Date()): Promise<AccountD
   return day;
 }
 
+// Until the account has this many followers, some of every week's posts ask people to follow.
+export const FOLLOWER_GOAL = 1000;
+const MIN_FOLLOW_POSTS = 2;
+
+/** How many of a week's posts must ask people to follow. An unknown count is treated as a new account. */
+export function minFollowPosts(followers: number | undefined): number {
+  return followers === undefined || followers < FOLLOWER_GOAL ? MIN_FOLLOW_POSTS : 0;
+}
+
+/** The most recent follower count on record. */
+export function latestFollowers(): number | undefined {
+  return loadAccountHistory().at(-1)?.followers;
+}
+
 /** Follower change over the last `days` days, from the recorded history. */
 export function followerChange(days = 7, now: Date = new Date()): { now?: number; then?: number; change?: number } {
   const history = loadAccountHistory();

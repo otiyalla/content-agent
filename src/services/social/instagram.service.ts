@@ -18,14 +18,53 @@ import type { PostInsights } from '../../instagram/types';
 
 export type TokenKind = 'facebook' | 'instagram';
 
-export interface IgComment {
+export interface IgReply {
   id: string;
   text: string;
   username: string;
   timestamp: string;
+}
+
+interface Page<T> {
+  data: T[];
+  paging?: { cursors?: { after?: string }; next?: string };
+}
+
+/** Everything read, or as much as the page cap allowed. Never mistake an incomplete list for the whole. */
+export interface Listed<T> {
+  items: T[];
+  complete: boolean;
+}
+
+export interface IgComment extends IgReply {
   like_count?: number;
   hidden?: boolean;
-  replies?: { data: Array<{ id: string; text: string; username: string; timestamp: string }> };
+  replies?: Page<IgReply>;
+  /** False if some replies couldn't be read (page cap). */
+  repliesComplete?: boolean;
+}
+
+export interface IgMedia {
+  id: string;
+  caption?: string;
+  permalink?: string;
+  timestamp: string;
+  comments_count?: number;
+}
+
+/** Missing = not available, which is not the same as 0. */
+export interface AccountInsights {
+  profileViews?: number;
+  websiteClicks?: number; // taps on the link in bio
+  reach?: number;
+}
+
+export interface IgTag {
+  id: string;
+  username?: string;
+  caption?: string;
+  permalink?: string;
+  timestamp: string;
 }
 
 export function tokenKind(token: string | undefined = env.IG_ACCESS_TOKEN): TokenKind {
@@ -234,17 +273,33 @@ export class InstagramService {
     return out;
   }
 
-  /** Account-wide totals between two dates (max 30 days): profile views, link taps, reach. */
-  async getAccountInsights(since: Date, until: Date): Promise<{ profileViews?: number; linkTaps?: number; websiteClicks?: number; reach?: number }> {
-    const res = await this.call<{ data: Array<{ name: string; total_value?: { value: number } }> }>('GET', `${env.IG_USER_ID}/insights`, {
-      metric: 'profile_views,profile_links_taps,website_clicks,reach',
-      period: 'day',
-      metric_type: 'total_value',
-      since: String(Math.floor(since.getTime() / 1000)),
-      until: String(Math.floor(until.getTime() / 1000)),
-    });
-    const v = (name: string) => res.data.find((d) => d.name === name)?.total_value?.value;
-    return { profileViews: v('profile_views'), linkTaps: v('profile_links_taps'), websiteClicks: v('website_clicks'), reach: v('reach') };
+  /**
+   * Account-wide totals between two dates (max 30 days). Each metric is asked for on its own, so one that
+   * Instagram stops serving can't blank the rest. websiteClicks is the link in bio; profile_links_taps
+   * (address, call, email and text buttons) is something else and isn't read.
+   */
+  async getAccountInsights(since: Date, until: Date): Promise<AccountInsights> {
+    const metrics = { profileViews: 'profile_views', websiteClicks: 'website_clicks', reach: 'reach' } as const;
+    const out: AccountInsights = {};
+    const failed: string[] = [];
+    await Promise.all(
+      (Object.keys(metrics) as Array<keyof typeof metrics>).map(async (key) => {
+        try {
+          const res = await this.call<{ data: Array<{ name: string; total_value?: { value: number } }> }>('GET', `${env.IG_USER_ID}/insights`, {
+            metric: metrics[key],
+            period: 'day',
+            metric_type: 'total_value',
+            since: String(Math.floor(since.getTime() / 1000)),
+            until: String(Math.floor(until.getTime() / 1000)),
+          });
+          out[key] = res.data.find((d) => d.name === metrics[key])?.total_value?.value;
+        } catch {
+          failed.push(metrics[key]);
+        }
+      }),
+    );
+    if (failed.length) console.warn(`[Instagram] account metrics not available: ${failed.join(', ')}`);
+    return out;
   }
 
   /**
@@ -274,13 +329,51 @@ export class InstagramService {
     return res.data;
   }
 
-  /** Top-level comments on a post, with their replies. Needs instagram_manage_comments. */
-  async getComments(mediaId: string): Promise<IgComment[]> {
-    const res = await this.call<{ data: IgComment[] }>('GET', `${mediaId}/comments`, {
-      fields: 'id,text,username,timestamp,like_count,hidden,replies{id,text,username,timestamp}',
-      limit: '50',
+  /** Reads a list page by page. Follows the cursor, never the raw "next" URL, which contains the token. */
+  private async list<T>(pathname: string, params: Record<string, string>, maxPages: number, opts: { first?: Page<T>; stop?: (item: T) => boolean } = {}): Promise<Listed<T>> {
+    const items: T[] = [];
+    let page = opts.first ?? (await this.call<Page<T>>('GET', pathname, params));
+    for (let n = 1; ; n++) {
+      for (const item of page.data ?? []) {
+        if (opts.stop?.(item)) return { items, complete: true };
+        items.push(item);
+      }
+      const after = page.paging?.cursors?.after;
+      if (!page.paging?.next || !after) return { items, complete: true };
+      if (n >= maxPages) return { items, complete: false };
+      page = await this.call<Page<T>>('GET', pathname, { ...params, after });
+    }
+  }
+
+  /** Our own posts published since `since`, newest first. */
+  async listMediaSince(since: Date, maxPages = 5): Promise<Listed<IgMedia>> {
+    const id = tokenKind() === 'facebook' ? env.IG_USER_ID! : 'me';
+    return this.list<IgMedia>(`${id}/media`, { fields: 'id,caption,permalink,timestamp,comments_count', limit: '50' }, maxPages, {
+      stop: (m) => Date.parse(m.timestamp) < since.getTime(),
     });
-    return res.data;
+  }
+
+  /** Every comment on a post with every reply. Needs instagram_manage_comments. */
+  async getComments(mediaId: string, maxPages = 10): Promise<Listed<IgComment>> {
+    const replyFields = 'id,text,username,timestamp';
+    const out = await this.list<IgComment>(
+      `${mediaId}/comments`,
+      { fields: `id,text,username,timestamp,like_count,hidden,replies.limit(50){${replyFields}}`, limit: '50' },
+      maxPages,
+    );
+    for (const c of out.items) {
+      if (!c.replies?.paging?.next) continue;
+      const replies = await this.list<IgReply>(`${c.id}/replies`, { fields: replyFields, limit: '50' }, maxPages, { first: c.replies });
+      c.replies = { data: replies.items };
+      c.repliesComplete = replies.complete;
+      if (!replies.complete) out.complete = false;
+    }
+    return out;
+  }
+
+  /** Public posts that tag our account, newest first. Story mentions and caption @mentions aren't included. */
+  async getTags(maxPages = 2): Promise<Listed<IgTag>> {
+    return this.list<IgTag>(`${env.IG_USER_ID}/tags`, { fields: 'id,username,caption,permalink,timestamp', limit: '50' }, maxPages);
   }
 
   /** Public profile fields shown to visitors: bio, link in bio, follower count. Read-only. */

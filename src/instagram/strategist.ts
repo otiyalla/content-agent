@@ -9,6 +9,7 @@ import { qaPost } from './qa';
 import { WeekPlanSchema, type WeekPlan, type PlannedPost, type CalendarPost } from './types';
 import { minFollowPosts } from './account';
 import { ZENLOT_SERIES, type Slot } from './calendar';
+import { topicsForPrompt } from './taxonomy';
 import { seasonalNotes } from './seasonal';
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,9 @@ Use "question" at most once per week.
 - hookType: the kind of opening the cover and caption line 1 use (stat, myth, question, mistake, story, how-to, checklist, contrarian).
 - ctaType: the main call to action (save, share, comment, follow, link).
 - series: the recurring series name if the post belongs to one, else "".
+
+# Topics (set topicId to the closest)
+${topicsForPrompt()}
 
 # Captions
 - Line 1 is a hook under 125 characters (it's all people see before "more").
@@ -272,7 +276,7 @@ so you don't repeat a mistake; why he wanted to see the possible gain or loss be
 post tells ONE part of the story, so over the weeks the account tells the whole thing. Never invent scenes,
 numbers, dates or outcomes. Never claim the founder is profitable or successful as a trader.
 Give the week a coherent theme so the posts reinforce each other.
-${season ? `\n# Seasonal moment\n${season}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\n` : ''}
+${season ? `\n# Seasonal moment\n${season}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\nA "[brief:<id> slot:<day>]" tag means that one slot's post should answer the question that follows it, inside its series. It never makes a post about another company. Don't repeat the tag anywhere.\n` : ''}
 # Performance so far
 ${performanceSummary(ctx.recentPosts)}
 

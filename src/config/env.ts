@@ -37,6 +37,12 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().default('Zenlot Agent <info@zenlot.net>'),
   EMAIL_TO: z.string().default('info@zenlot.net'),
+  // Gets the comment digest too while OWNER_AWAY is true. Never log or commit it (docs/INCIDENTS.md).
+  SAFETY_BACKUP_EMAIL: z.string().optional(),
+  // Comma-separated names kept out of saved plans. A secret: the list itself must not be public.
+  RADAR_COMPETITOR_NAMES: z.string().optional(),
+  // Set by the owner: nothing publishes and no drafts are sent, but the comment digest keeps going.
+  OWNER_AWAY: z.string().default('false').transform((val) => val.trim().toLowerCase() === 'true'),
 
   // Instagram (Instagram API with Instagram Login — no Facebook Page required)
   IG_USER_ID: z.string().optional(),

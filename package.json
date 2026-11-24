@@ -4,7 +4,8 @@
   "description": "Content creation and social management agent for Zenlot",
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p test",
+    "test": "TS_NODE_PROJECT=test/tsconfig.json node --require ts-node/register --require ./test/setup.ts --test test/*.test.ts",
     "run:hunter": "ts-node src/workflows/pain-point-hunter.ts",
     "run:creator": "ts-node src/workflows/content-creator.ts",
     "run:engager": "ts-node src/workflows/community-engager.ts",
@@ -17,6 +18,7 @@
     "r2:check": "ts-node src/workflows/r2-check.ts",
     "golive:check": "ts-node src/workflows/golive-check.ts",
     "ig:profile-assets": "ts-node src/instagram/profile-assets.ts",
+    "ig:fields": "ts-node src/workflows/ig-field-check.ts",
     "ig:comments": "ts-node src/workflows/instagram-comments.ts",
     "ig:repreview": "ts-node src/workflows/instagram-repreview.ts",
     "ig:story": "ts-node src/workflows/instagram-story.ts",

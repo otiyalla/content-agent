@@ -1,4 +1,5 @@
 import { ZENLOT_PRODUCT } from '../config/zenlot';
+import { extractList, extractObject } from './json';
 import { complete, LLMChainError } from './llm-providers';
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,12 @@ export interface SynthesizedFeatureRequest {
   source: 'reddit' | 'twitter' | 'mixed';
 }
 
+/** Enough of the shape to email it safely. */
+function isFeatureRequest(v: unknown): v is SynthesizedFeatureRequest {
+  const f = v as SynthesizedFeatureRequest | null;
+  return typeof f === 'object' && f !== null && typeof f.title === 'string' && typeof f.suggestedPriority === 'string' && typeof f.riceScore?.total === 'number' && Array.isArray(f.supportingQuotes);
+}
+
 // Kept for backwards compatibility: thrown when every provider (Claude, OpenAI, Grok) fails.
 export { LLMChainError as LLMDualProviderError };
 
@@ -74,26 +81,6 @@ const HOOK_FORMULAS = [
 // ---------------------------------------------------------------------------
 
 export class LLMService {
-  // -------------------------------------------------------------------------
-  // Internal helpers
-  // -------------------------------------------------------------------------
-
-  /**
-   * Extracts a JSON object or array from a text response.
-   * Falls back to `defaultValue` if parsing fails.
-   */
-  private parseJson<T>(text: string, defaultValue: T): T {
-    const objMatch = text.match(/\{[\s\S]*\}/);
-    const arrMatch = text.match(/\[[\s\S]*\]/);
-    const raw = objMatch?.[0] ?? arrMatch?.[0];
-    if (!raw) return defaultValue;
-    try {
-      return JSON.parse(raw) as T;
-    } catch {
-      return defaultValue;
-    }
-  }
-
   // -------------------------------------------------------------------------
   // Public API — identical interface regardless of which provider runs
   // -------------------------------------------------------------------------
@@ -131,7 +118,7 @@ Reply in this exact JSON format:
     };
 
     const text = await complete('analyzePainPoint', prompt, { maxTokens: 1024, tier: 'complex', json: true });
-    return this.parseJson<PainPointAnalysis>(text, defaultValue);
+    return extractObject<PainPointAnalysis>(text, defaultValue);
   }
 
   /**
@@ -189,7 +176,7 @@ Return JSON:
     const defaultValue = { content: '', isThread: false, estimatedEngagement: 'low' as const };
 
     const text = await complete('generatePost', prompt, { maxTokens: 1024, tier: 'complex', json: true });
-    const parsed = this.parseJson(text, defaultValue);
+    const parsed = extractObject(text, defaultValue);
 
     return { ...parsed, contentType };
   }
@@ -208,10 +195,10 @@ Generate 5 additional search queries that would surface posts from traders exper
 Focus on: blown accounts, position sizing mistakes, emotional trading, stop-loss avoidance, poor journaling habits.
 Make them conversational (how people actually tweet/post), not keyword stuffed.
 
-Return a JSON array of strings only: ["query1", "query2", ...]`;
+Return JSON only: {"queries": ["query1", "query2", ...]}`;
 
     const text = await complete('generateSearchQueries', prompt, { maxTokens: 512, tier: 'simple', json: true });
-    return this.parseJson<string[]>(text, []);
+    return extractList(text, 'queries', (v): v is string => typeof v === 'string' && v.trim() !== '');
   }
 
   /**
@@ -286,7 +273,7 @@ Return JSON:
     const defaultValue: RedditEducationalPost = { title: '', body: '', estimatedEngagement: 'low' };
 
     const text = await complete('generateRedditEducationalPost', prompt, { maxTokens: 2048, tier: 'complex', json: true });
-    return this.parseJson<RedditEducationalPost>(text, defaultValue);
+    return extractObject<RedditEducationalPost>(text, defaultValue);
   }
 
   /**
@@ -321,8 +308,8 @@ RICE scoring guide:
 - Effort (weeks): rough engineering estimate
 - Total = (Reach × Impact × Confidence) / Effort
 
-Return a JSON array of up to 5 feature requests, most impactful first:
-[
+Return JSON only, with up to 5 feature requests, most impactful first:
+{"features": [
   {
     "title": "Short feature name",
     "description": "What it does and why it matters",
@@ -331,10 +318,10 @@ Return a JSON array of up to 5 feature requests, most impactful first:
     "suggestedPriority": "critical" | "high" | "medium" | "low",
     "source": "reddit" | "twitter" | "mixed"
   }
-]`;
+]}`;
 
     const text = await complete('synthesizeFeedback', prompt, { maxTokens: 2048, tier: 'complex', json: true });
-    return this.parseJson<SynthesizedFeatureRequest[]>(text, []);
+    return extractList(text, 'features', isFeatureRequest);
   }
 
   /**
@@ -371,7 +358,7 @@ Return JSON:
     const defaultValue = { score: 0, reason: '', addedValueReply: null };
 
     const text = await complete('scoreEngagementOpportunity', prompt, { maxTokens: 512, tier: 'simple', json: true });
-    return this.parseJson(text, defaultValue);
+    return extractObject(text, defaultValue);
   }
 }
 

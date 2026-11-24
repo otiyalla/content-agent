@@ -80,14 +80,16 @@ class OutboxService {
     const { text, issue } = withDisclaimer(draft);
     const issues = [...lintCopy(`${draft.title ?? ''}\n${text}`), ...(draft.kind === 'reply' ? lintReply(text) : []), ...(issue ? [issue] : [])];
 
-    if (draft.kind === 'post' && env.AGENTS_AUTOPOST && issues.length === 0) return text;
+    if (draft.kind === 'post' && env.AGENTS_AUTOPOST && !env.OWNER_AWAY && issues.length === 0) return text;
 
     this.held.push({ ...draft, text, issues, workflow: '', heldAt: new Date().toISOString() });
     const reason = issues.length
       ? `brand check: ${issues.join('; ')}`
       : draft.kind === 'reply'
         ? 'replies always wait for a person'
-        : 'waiting for approval (AGENTS_AUTOPOST is off)';
+        : env.OWNER_AWAY
+          ? 'the owner is away (OWNER_AWAY)'
+          : 'waiting for approval (AGENTS_AUTOPOST is off)';
     console.log(`📥 [Outbox] Held ${draft.platform} ${draft.action} — ${reason}`);
     return null;
   }
@@ -112,6 +114,10 @@ class OutboxService {
    * rank above ones that failed the brand check; then by score, newest first.
    */
   async sendDigest(now: Date = new Date()): Promise<{ sent: number; dropped: number }> {
+    if (env.OWNER_AWAY) {
+      console.log('[Outbox] The owner is away (OWNER_AWAY): no drafts sent. Drafts over 48 hours old are dropped as usual afterwards.');
+      return { sent: 0, dropped: 0 };
+    }
     const queue = loadQueue();
     const fresh = queue.filter((d) => now.getTime() - Date.parse(d.heldAt) <= MAX_AGE_MS);
     if (!fresh.length) {

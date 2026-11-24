@@ -17,7 +17,8 @@ Mon–Thu + Sat 13:07 ─ publisher ──► renders the post from the calendar
 
 Every publisher run also freezes each post's insights at 48 hours and 7 days (follows, profile visits,
 link-in-bio taps, reach, saves, shares) and records the follower count in
-content/instagram/account-history.json. The planner ranks posts by follows per 1,000 reach at 48 hours,
+content/instagram/account-history.json. Sunday's report stores the week's profile views, link-in-bio taps and reach in
+account-metrics.json. The planner ranks posts by follows per 1,000 reach at 48 hours,
 and only once about 10 posts are measured.
 ```
 
@@ -105,6 +106,8 @@ Secrets:
 | `IG_ACCESS_TOKEN` | Instagram token from step 1 |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | from step 2 |
 | `GH_SECRETS_TOKEN` | *(only for 60-day `IG…` tokens)* fine-grained PAT with **Secrets: Read and write** so the workflow can refresh the token weekly. Not needed for Unified Login system-user tokens, which never expire. |
+| `SAFETY_BACKUP_EMAIL` | *(optional)* also gets the comment digest while `OWNER_AWAY` is `true` |
+| `RADAR_COMPETITOR_NAMES` | *(optional)* comma-separated names kept out of saved plans |
 | `XAI_API_KEY` | xAI Grok key, the second backup LLM (from console.x.ai) |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `SMTP_*`, `EMAIL_*` | already used by the other agents |
 
@@ -115,6 +118,7 @@ Variables:
 | `R2_PUBLIC_BASE_URL` | e.g. `https://social.zenlot.net` |
 | `R2_BUCKET` | `zenlot-social` |
 | `IG_HANDLE` | the account handle shown on every slide, e.g. `@zenlot_app` |
+| `OWNER_AWAY` | `true` while you're away: nothing publishes, the comment digest continues ([INCIDENTS.md](INCIDENTS.md)) |
 | `IG_LIVE` | `true` to actually publish. **Leave unset until you've reviewed a dry run.** |
 
 ### 4. Go live

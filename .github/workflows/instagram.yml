@@ -58,6 +58,9 @@ env:
   SMTP_PASS: ${{ secrets.SMTP_PASS }}
   EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
   EMAIL_TO: ${{ secrets.EMAIL_TO }}
+  OWNER_AWAY: ${{ vars.OWNER_AWAY }} # "true" = nothing publishes; comment digest continues (docs/INCIDENTS.md)
+  SAFETY_BACKUP_EMAIL: ${{ secrets.SAFETY_BACKUP_EMAIL }}
+  RADAR_COMPETITOR_NAMES: ${{ secrets.RADAR_COMPETITOR_NAMES }} # kept out of saved plans (src/content/claims-lint.ts)
   HAS_GH_SECRETS_TOKEN: ${{ secrets.GH_SECRETS_TOKEN != '' }}
 
 jobs:

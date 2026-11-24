@@ -48,6 +48,15 @@ export class InstagramApiError extends Error {
   }
 }
 
+/** Instagram couldn't be asked whether a post is already live, so nobody knows. Never retry a publish without asking again. */
+export class LiveCheckError extends Error {}
+
+/** Which live posts can count as "this one": not older than `since`, and not in `exclude`. */
+export interface LiveMatch {
+  since?: Date;
+  exclude?: Set<string>;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class InstagramService {
@@ -117,7 +126,7 @@ export class InstagramService {
    * Publishes one image or a carousel. Returns the published media id and permalink.
    * imageUrls must be public JPEG URLs; altTexts[i] describes imageUrls[i].
    */
-  async publish(imageUrls: string[], caption: string, altTexts: string[] = []): Promise<{ mediaId: string; permalink?: string }> {
+  async publish(imageUrls: string[], caption: string, altTexts: string[] = [], match: LiveMatch = {}): Promise<{ mediaId: string; permalink?: string }> {
     let creationId: string;
 
     if (imageUrls.length === 1) {
@@ -132,7 +141,16 @@ export class InstagramService {
     }
 
     await this.waitForContainer(creationId);
-    const { id: mediaId } = await this.call<{ id: string }>('POST', `${env.IG_USER_ID}/media_publish`, { creation_id: creationId });
+    let mediaId: string;
+    try {
+      ({ id: mediaId } = await this.call<{ id: string }>('POST', `${env.IG_USER_ID}/media_publish`, { creation_id: creationId }));
+    } catch (err) {
+      // The post may be live even though the reply was lost or an error came back. Look before calling it failed.
+      const live = await this.findPublishedAfterError(caption, match);
+      if (!live) throw err;
+      console.warn(`  media_publish reported an error (${err instanceof Error ? err.message : err}) but the post is live`);
+      return live;
+    }
 
     let permalink: string | undefined;
     try {
@@ -141,6 +159,40 @@ export class InstagramService {
       // permalink is nice-to-have
     }
     return { mediaId, permalink };
+  }
+
+  /** A recent post with exactly this caption (ignoring whitespace), if there is one. Throws LiveCheckError if Instagram can't be asked. */
+  async findPublished(caption: string, match: LiveMatch = {}): Promise<{ mediaId: string; permalink?: string; timestamp?: string } | null> {
+    const norm = (s: string) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
+    const wanted = norm(caption);
+    let media: Awaited<ReturnType<InstagramService['listRecentMedia']>>;
+    try {
+      media = await this.listRecentMedia(25);
+    } catch (err) {
+      throw new LiveCheckError(`could not check whether the post is already live: ${err instanceof Error ? err.message : err}`);
+    }
+    const hit = media.find(
+      (m) =>
+        norm(m.caption ?? '') === wanted && !match.exclude?.has(m.id) && !(match.since && Date.parse(m.timestamp) < match.since.getTime()),
+    );
+    return hit ? { mediaId: hit.id, permalink: hit.permalink, timestamp: hit.timestamp } : null;
+  }
+
+  /** Null only if Instagram answered and the post isn't there; throws LiveCheckError if it never answered. */
+  private async findPublishedAfterError(caption: string, match: LiveMatch): Promise<{ mediaId: string; permalink?: string } | null> {
+    let lastError: LiveCheckError | null = null;
+    for (const wait of [5_000, 10_000, 20_000]) {
+      await sleep(wait);
+      try {
+        const live = await this.findPublished(caption, match);
+        if (live) return { mediaId: live.mediaId, permalink: live.permalink };
+        lastError = null;
+      } catch (err) {
+        lastError = err as LiveCheckError; // keep trying
+      }
+    }
+    if (lastError) throw lastError;
+    return null;
   }
 
   /**

@@ -133,7 +133,8 @@
       "series": "",
       "rationale": "Checklists are the most saveable single-image format, and the account has no data yet, so this tests whether practical, reusable tools out-save Monday's maths. It converts Monday's insight (keep drawdowns shallow) into action, reinforcing the theme. Its plain list layout also varies the grid between two carousels.",
       "previewHash": "974aba00fbad25a8",
-      "previewedAt": "2026-11-19T00:31:14.142Z"
+      "previewedAt": "2026-11-23T14:14:09.461Z",
+      "previewRenderHash": "c5974532cd764251"
     },
     {
       "id": "2026-W48-wed",
@@ -225,7 +226,8 @@
       "series": "",
       "rationale": "No historical data yet, so this deliberately tests the psychology pillar with a reassuring, contrarian hook aimed at our core pain point (traders who blew accounts by revenge trading). It's highly shareable because readers send it to friends mid-drawdown. It links Monday's drawdown maths to behaviour, and all probabilities are shown (0.6^5, 0.99^5).",
       "previewHash": "127691381dcf7d9f",
-      "previewedAt": "2026-11-23T03:54:14.866Z"
+      "previewedAt": "2026-11-23T03:54:14.866Z",
+      "previewRenderHash": "f10351c27272dd2e"
     },
     {
       "id": "2026-W48-thu",
@@ -258,7 +260,8 @@
       "series": "",
       "rationale": "Myth-vs-fact singles are shareable because they challenge a belief many beginners hold. With a fresh account, this also tests a contrarian single against Tuesday's checklist. It builds on Wednesday's expectancy maths from the opposite direction (a low win rate can win, a high one can lose), using fully shown arithmetic. It also adds a third single-image layout to the grid.",
       "previewHash": "39f30caaa21e5ae5",
-      "previewedAt": "2026-11-19T00:31:14.142Z"
+      "previewedAt": "2026-11-23T14:14:09.461Z",
+      "previewRenderHash": "4f0d5a80f283fef0"
     },
     {
       "id": "2026-W48-sat",
@@ -336,7 +339,8 @@
       "series": "",
       "rationale": "This is the week's only Zenlot mention, scheduled last so four value-first posts build trust before it. It leads with a concrete problem and a worked formula that's worth saving even without the app. All figures check out (0.2 lots × $10 × 25 pips = $50; 0.5 × $10 × 60 = $300 = 6%). With no baseline yet, comparing its saves to Monday's carousel will show whether product posts can perform when they lead with education.",
       "previewHash": "959d39dc8b8241df",
-      "previewedAt": "2026-11-23T03:54:14.866Z"
+      "previewedAt": "2026-11-23T03:54:14.866Z",
+      "previewRenderHash": "2c14f85940851a39"
     }
   ]
 }

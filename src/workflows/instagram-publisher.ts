@@ -1,15 +1,15 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
-import { instagramService } from '../services/social/instagram.service';
+import { LiveCheckError, instagramService } from '../services/social/instagram.service';
 import { storageService } from '../services/storage.service';
-import { isoWeekId, loadCalendar, saveCalendar } from '../instagram/calendar';
-import { renderPost } from '../instagram/renderer';
+import { isoWeekId, loadCalendar, publishedMediaIds, saveCalendar } from '../instagram/calendar';
+import { renderHash, renderPost } from '../instagram/renderer';
 import { refreshInsights } from '../instagram/insights';
 import { recordAccountDay } from '../instagram/account';
 import { qaPost } from '../instagram/qa';
 import { postAltTexts } from '../instagram/alt-text';
-import { CHANGE_HOLD_MS, contentHash, markPreviewed } from '../instagram/approval';
-import { sendChangePreview } from '../instagram/preview';
+import { CHANGE_HOLD_MS, MAX_LATENESS_MS, canStillPublish, markPreviewed, previewMismatch, scheduleProblem } from '../instagram/approval';
+import { sendChangePreview, sendMissedNotice } from '../instagram/preview';
 import { renderReshareStory } from '../instagram/reshare-story';
 import type { CalendarPost } from '../instagram/types';
 
@@ -25,11 +25,9 @@ import type { CalendarPost } from '../instagram/types';
 //   DRY_RUN=true npm run ig:publish -- --now 2026-11-23T13:07:00Z
 // ---------------------------------------------------------------------------
 
-// A post that couldn't go out within this window is marked "missed" rather than
-// published late (a Monday post landing on Wednesday crowds the next one).
-const MAX_LATENESS_MS = 30 * 3600_000;
 const MAX_PUBLISHES_PER_RUN = 2;
 const MAX_ATTEMPTS = 3;
+const LIVE_MATCH_MS = 14 * 86400_000; // how far before its slot a live post can still be this one
 
 function hashtagsBlock(post: CalendarPost): string {
   return post.hashtags.length ? `\n\n${post.hashtags.map((t) => `#${t}`).join(' ')}` : '';
@@ -54,6 +52,18 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
     return;
   }
 
+  // Never trust the calendar alone: if an earlier run published this and its record was lost, take the live post.
+  // Posts the calendar already accounts for, or much older ones, are repeats of the same text, not this post.
+  const match = { since: new Date(Date.parse(post.scheduledAt) - LIVE_MATCH_MS), exclude: publishedMediaIds(post.id) };
+  const live = await instagramService.findPublished(caption, match);
+  if (live) {
+    post.status = 'published';
+    post.published = { mediaId: live.mediaId, permalink: live.permalink, publishedAt: live.timestamp ? new Date(live.timestamp).toISOString() : new Date().toISOString(), imageUrls: [] };
+    delete post.lastError;
+    console.warn(`  ⚠️  Already live at ${live.permalink ?? live.mediaId}; recorded it instead of publishing again (no Story posted)`);
+    return;
+  }
+
   const imageUrls: string[] = [];
   for (let i = 0; i < images.length; i++) {
     const hash = crypto.createHash('sha256').update(images[i]).digest('hex').slice(0, 12);
@@ -61,7 +71,7 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   }
   console.log(`  Uploaded ${imageUrls.length} image(s) to R2`);
 
-  const { mediaId, permalink } = await instagramService.publish(imageUrls, caption, postAltTexts(post));
+  const { mediaId, permalink } = await instagramService.publish(imageUrls, caption, postAltTexts(post), match);
   post.status = 'published';
   post.published = { mediaId, permalink, publishedAt: new Date().toISOString(), imageUrls };
   delete post.lastError;
@@ -92,11 +102,34 @@ async function postReshareStory(week: string, post: CalendarPost, cover: Buffer)
   }
 }
 
+function recordFailure(post: CalendarPost, err: unknown): void {
+  if (post.published) {
+    // Live posts are never downgraded: that would publish them again.
+    console.error(`  ❌ ${post.id}: ${err instanceof Error ? err.message : err} (already published)`);
+    return;
+  }
+  post.attempts = (post.attempts ?? 0) + 1;
+  post.lastError = err instanceof Error ? err.message : String(err);
+  post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
+  console.error(`  ❌ ${post.id}: ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
+}
+
+/** Emails that a post was missed. The reason stays on the post until the email goes out, so later runs retry. Returns true if the post changed. */
+async function notifyMissed(week: string, post: CalendarPost, reason = post.missedNotice ?? ''): Promise<boolean> {
+  if (!(await sendMissedNotice(week, post, reason))) {
+    console.error(`  ❌ notice email for ${post.id} was not sent; retried next run`);
+    return false;
+  }
+  if (env.DRY_RUN) return false;
+  delete post.missedNotice;
+  return true;
+}
 
 async function main() {
   // --now <ISO> lets you simulate a run at a specific time (useful with DRY_RUN).
   const nowArg = process.argv.indexOf('--now');
   const now = nowArg >= 0 ? new Date(process.argv[nowArg + 1]) : new Date();
+  if (Number.isNaN(now.getTime())) throw new Error('--now is not a valid time');
   console.log(`📤 Instagram publisher — ${now.toISOString()}${env.DRY_RUN ? ' [DRY RUN]' : ''}`);
 
   if (!env.DRY_RUN && (!instagramService.configured || !storageService.configured)) {
@@ -116,7 +149,14 @@ async function main() {
     let changed = false;
 
     for (const post of cal.posts) {
+      if (post.status === 'missed' && post.missedNotice && (await notifyMissed(week, post))) changed = true;
       if (post.status !== 'scheduled' && post.status !== 'failed') continue;
+      const problem = scheduleProblem(post);
+      if (problem) {
+        failures++;
+        console.error(`  ❌ ${post.id}: ${problem}. Not publishing it until that's fixed.`);
+        continue;
+      }
       const due = Date.parse(post.scheduledAt);
       if (due > now.getTime()) continue;
 
@@ -131,12 +171,36 @@ async function main() {
         continue;
       }
 
-      // What you reviewed is what ships: a post edited since its preview gets a new preview and a hold.
-      if (post.previewHash && post.previewHash !== contentHash(post)) {
+      // What you reviewed is what ships: if the text or the rendered slides changed since the preview,
+      // email a new preview and hold the post.
+      let fingerprint: string;
+      try {
+        fingerprint = await renderHash(post);
+      } catch (err) {
+        // One broken post must not stop the others.
+        failures++;
+        changed = true;
+        recordFailure(post, err);
+        continue;
+      }
+      const mismatch = previewMismatch(post, fingerprint);
+      if (mismatch) {
         const after = new Date(now.getTime() + CHANGE_HOLD_MS);
-        console.log(`✋ ${post.id} changed since it was previewed — emailing a new preview; it publishes after ${after.toISOString()}`);
+        if (!canStillPublish(post, after)) {
+          console.log(`⏭  ${post.id}: ${mismatch}, and no run is left after a hold — marking missed`);
+          failures++;
+          if (!env.DRY_RUN) {
+            post.status = 'missed';
+            post.lastError = `${mismatch}; too late to preview and hold`;
+            post.missedNotice = mismatch;
+            changed = true;
+          }
+          await notifyMissed(week, post, mismatch);
+          continue;
+        }
+        console.log(`✋ ${post.id}: ${mismatch} — emailing a new preview; it publishes after ${after.toISOString()}`);
         try {
-          await sendChangePreview(week, post, after);
+          await sendChangePreview(week, post, after, mismatch);
         } catch (err) {
           // Keep holding: a changed post never publishes until its preview has actually been sent.
           console.error(`  ❌ ${err instanceof Error ? err.message : err}; ${post.id} stays on hold and is retried next run`);
@@ -144,8 +208,8 @@ async function main() {
           continue;
         }
         if (!env.DRY_RUN) {
-          markPreviewed(post, now);
-          changed = true;
+          markPreviewed(post, fingerprint, now);
+          saveCalendar(cal); // the email is out: don't send it again if this run crashes later
         }
         continue;
       }
@@ -153,22 +217,32 @@ async function main() {
         console.log(`⏳ ${post.id} was re-previewed at ${post.previewedAt}; waiting out the ${CHANGE_HOLD_MS / 3600_000}h veto window`);
         continue;
       }
-      if (!post.previewHash) console.warn(`⚠️  ${post.id} has no preview fingerprint (planned before previews were tracked)`);
 
       console.log(`📮 ${post.id}: ${post.topic}`);
       try {
         await publishPost(week, post);
-        if (!env.DRY_RUN) {
-          published++;
-          changed = true;
-        }
       } catch (err) {
         failures++;
-        post.attempts = (post.attempts ?? 0) + 1;
-        post.lastError = err instanceof Error ? err.message : String(err);
-        post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
+        if (err instanceof LiveCheckError) {
+          // Not a failed publish: the post stays due and the next run asks again before publishing.
+          console.error(`  ❌ ${post.id}: ${err.message}; retried next run`);
+          continue;
+        }
         changed = true;
-        console.error(`  ❌ ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
+        recordFailure(post, err);
+        continue;
+      }
+      if (!env.DRY_RUN) {
+        published++;
+        changed = true;
+        // Save now in case something later in this run crashes. If the save itself fails the post stays
+        // published in memory, is saved again below, and is never treated as a failed publish.
+        try {
+          saveCalendar(cal);
+        } catch (err) {
+          failures++;
+          console.error(`  ❌ ${post.id} is published but the calendar was not saved: ${err instanceof Error ? err.message : err}`);
+        }
       }
     }
 

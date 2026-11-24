@@ -98,7 +98,7 @@
     {
       "id": "2026-W48-tue",
       "scheduledAt": "2026-11-24T13:00:00.000Z",
-      "status": "scheduled",
+      "status": "published",
       "pillar": "process",
       "topic": "Six-point pre-trade checklist that turns impulses into decisions",
       "slides": [
@@ -134,7 +134,15 @@
       "rationale": "Checklists are the most saveable single-image format, and the account has no data yet, so this tests whether practical, reusable tools out-save Monday's maths. It converts Monday's insight (keep drawdowns shallow) into action, reinforcing the theme. Its plain list layout also varies the grid between two carousels.",
       "previewHash": "974aba00fbad25a8",
       "previewedAt": "2026-11-23T14:14:09.461Z",
-      "previewRenderHash": "c5974532cd764251"
+      "previewRenderHash": "c5974532cd764251",
+      "published": {
+        "mediaId": "18599218945068570",
+        "permalink": "https://www.instagram.com/p/DgICOoLk-Cd/",
+        "publishedAt": "2026-11-24T13:12:55.892Z",
+        "imageUrls": [
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-tue/1-9d70f5de03bd.jpg"
+        ]
+      }
     },
     {
       "id": "2026-W48-wed",

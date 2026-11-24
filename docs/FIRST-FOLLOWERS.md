@@ -37,6 +37,41 @@ Post these from the founder's own accounts. Edit them so they sound like you. Th
 > Hey, I've started an Instagram for Zenlot, the trading journal I built. If it's useful to you I'd love a follow,
 > and tell me honestly what you think: instagram.com/zenlot_app
 
+**Telegram forex group**
+
+> Quick bit of risk maths that changed how I size trades:
+>
+> Lose 10% → you need +11.1% to get back<br>
+> Lose 30% → you need +42.9%<br>
+> Lose 50% → you need +100%
+>
+> You can't control whether a losing streak comes, but you can control how deep it goes. At 1% risk per trade, 10
+> losses in a row leaves you about 9.6% down.
+>
+> I used to make more mistakes when I ignored my own rules, so I started writing down every trade in a spreadsheet.
+> That became Zenlot, a free forex trading journal I built for iOS and Android.
+>
+> We've just started on Instagram, posting risk maths with the working shown, pre-trade checklists and ways to review
+> your trades. No signals, no paid group, and we never DM you for money.
+>
+> https://www.instagram.com/zenlot_app/
+>
+> Which rule do you find hardest to stick to? Mine was [your answer].
+>
+> Educational only, not financial advice.
+
+**Telegram, short version for groups that are strict about promotion**
+
+> I built a free forex trading journal called Zenlot after tracking my own mistakes in a spreadsheet. We've started an
+> Instagram with risk maths and trade review tips. No signals, nothing to buy: https://www.instagram.com/zenlot_app/
+>
+> Honest feedback welcome. What would you want to see covered? Not financial advice.
+
+Before posting on Telegram: fill in `[your answer]`, and change "changed how I size trades" if it isn't true for you.
+Check the group's rules or ask an admin, because many groups ban links. Post once per group, reply in the chat, and
+don't DM members first. Skip groups that sell signals or push broker referrals. In a channel only admins can post, so
+ask one to share it.
+
 Send these from your personal account only. @zenlot_app never messages people first: its bio promises "we never
 DM you for money", and a DM from a forex brand looks like a scam.
 

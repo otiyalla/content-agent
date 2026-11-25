@@ -16,6 +16,13 @@ One page for when something goes wrong. Check it once a year, and the links with
 also goes to the `SAFETY_BACKUP_EMAIL` secret. Set that secret first. Nothing can tell that an email went unread, so
 the switch is yours to flip.
 
+## Posts that don't go out
+
+You get one email when a post is missed (too late, failed 3 times, bad date, or changed too late to preview). A daily
+warning lists posts 5 to 54 hours overdue, missing plans and a stopped Worker. Turning `IG_LIVE` off brings these warnings
+for posts that come due. With `OWNER_AWAY` on, GitHub reports only a stopped Worker (also to `SAFETY_BACKUP_EMAIL`). Start the job by hand: GitHub → Actions → Zenlot
+Instagram → Run workflow. Setup and limits: `cron-trigger/README.md`.
+
 ## Severity
 
 | Level | Examples | First move |

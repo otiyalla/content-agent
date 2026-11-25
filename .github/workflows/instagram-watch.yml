@@ -1,0 +1,43 @@
+name: Zenlot Instagram watch
+
+# Emails when a post is overdue, a plan is missing, or the Cloudflare Worker has stopped starting jobs.
+# On GitHub's own schedule so it works when the Worker is down. Reads only; posts and commits nothing.
+
+on:
+  schedule:
+    - cron: '47 19 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Pinned to commits (v4): a moved tag can't change what runs here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx ts-node src/workflows/instagram-watch.ts
+        env:
+          DRY_RUN: 'false' # it posts nothing, and must warn even if IG_LIVE was turned off by mistake
+          IG_LIVE: ${{ vars.IG_LIVE }}
+          OWNER_AWAY: ${{ vars.OWNER_AWAY }} # then only a stopped Worker is reported, to the backup address too
+          SAFETY_BACKUP_EMAIL: ${{ secrets.SAFETY_BACKUP_EMAIL }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}

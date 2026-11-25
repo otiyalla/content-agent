@@ -15,3 +15,12 @@ crons = ["7 13,14,18 * * *", "37 13-16,19,22 * * *", "0 16 * * SUN"]
 enabled = true
 
 # Secret (not in this file): GITHUB_TOKEN — set with `npx wrangler secret put GITHUB_TOKEN`.
+
+# Warning emails (README "Warnings"). Uncomment once the sending subdomain is set up in Cloudflare.
+# [[send_email]]
+# name = "EMAIL"
+#
+# and add under [vars]:
+# ALERT_FROM = "alerts@alerts.zenlot.net"
+#
+# Secret: ALERT_TO — the address that gets the warnings (kept out of this public file).

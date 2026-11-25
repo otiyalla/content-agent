@@ -10,6 +10,7 @@ import { WeekPlanSchema, type WeekPlan, type PlannedPost, type CalendarPost } fr
 import { minFollowPosts } from './account';
 import { ZENLOT_SERIES, type Slot } from './calendar';
 import { topicsForPrompt } from './taxonomy';
+import { eventIssues, eventNotes, eventsRunOut } from './events';
 import { seasonalNotes } from './seasonal';
 
 // ---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ export interface PlanningContext {
   recentPosts: CalendarPost[]; // previous weeks, for de-duplication and learning
   notes?: string; // optional steer from a human, e.g. "focus on NFP week"
   followers?: number; // current follower count; below FOLLOWER_GOAL the week must ask for follows
-  weekStart?: Date; // Monday of the planned week, for seasonal moments
+  weekStart?: Date; // Monday of the planned week, for seasonal moments and market events
 }
 
 // Below this many posts measured at the same age, rankings are noise.
@@ -222,11 +223,12 @@ export function withFollowAsk(caption: string, series: string): string {
   return [...lines.slice(0, at), ask, '', ...lines.slice(at)].join('\n');
 }
 
-function buildPrompt(ctx: PlanningContext): string {
+export function buildPrompt(ctx: PlanningContext): string {
   const slotLines = ctx.slots
     .map((s, i) => `  slot ${i}: ${s.day.toUpperCase()} ${s.hourUtc}:00 UTC — ${s.format} — series "${s.series}" — pillar ${s.pillars.join(' or ')}. ${s.brief}`)
     .join('\n');
   const season = ctx.weekStart ? seasonalNotes(ctx.weekStart) : '';
+  const events = ctx.weekStart ? eventNotes(ctx.weekStart) : '';
   // Posts that were held or missed never ran, so their angle is still free. A vetoed one was turned down: don't repeat it.
   const recentTitles =
     ctx.recentPosts
@@ -276,7 +278,7 @@ so you don't repeat a mistake; why he wanted to see the possible gain or loss be
 post tells ONE part of the story, so over the weeks the account tells the whole thing. Never invent scenes,
 numbers, dates or outcomes. Never claim the founder is profitable or successful as a trader.
 Give the week a coherent theme so the posts reinforce each other.
-${season ? `\n# Seasonal moment\n${season}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\nA "[brief:<id> slot:<day>]" tag means that one slot's post should answer the question that follows it, inside its series. It never makes a post about another company. Don't repeat the tag anywhere.\n` : ''}
+${season ? `\n# Seasonal moment\n${season}\n` : ''}${events ? `\n# Market events this week (risk notes only)\n${events}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\nA "[brief:<id> slot:<day>]" tag means that one slot's post should answer the question that follows it, inside its series. It never makes a post about another company. Don't repeat the tag anywhere.\n` : ''}
 # Performance so far
 ${performanceSummary(ctx.recentPosts)}
 
@@ -353,6 +355,9 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<PlanChec
     if (post.slides[0]) post.slides[0].kicker = series;
     const text = `${post.caption}\n${post.slides.map((sl) => [sl.title, sl.body, ...sl.items].join(' ')).join('\n')}`;
     const crossRef = CROSS_DAY_REF.exec(text);
+    const event = eventIssues([...text.split('\n'), ...post.slides.flatMap((sl) => [sl.title, sl.body, sl.stat, ...sl.items])].join('\n'));
+    event.block.forEach(block);
+    event.warn.forEach(warn);
     if (crossRef) warn(`refers to another post ("${crossRef[0]}"); posts must stand alone`);
     if (!post.caption.includes('not financial advice')) {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
@@ -477,5 +482,6 @@ export async function planWeek(ctx: PlanningContext, ask: (prompt: string) => Pr
     const left = allProblems(check, minFollow);
     if (left.length) console.warn(`[Strategist] still open: ${left.join('; ')}`);
   }
-  return usableWeek(best.theme, check, minFollow);
+  const week = usableWeek(best.theme, check, minFollow);
+  return { ...week, warnings: [...week.warnings, ...(ctx.weekStart ? eventsRunOut(ctx.weekStart) : [])] };
 }

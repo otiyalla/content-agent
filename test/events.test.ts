@@ -31,6 +31,19 @@ test('risk notes and correct dates pass', () => {
   ]) assert.deepEqual(one(t, W49), { block: [], warn: [] }, t);
   for (const t of ['Fed decision on 9 December: smaller size or stand aside?', 'The Fed decision, Wednesday 9 Dec', 'Fed meeting, December 8-9', 'The Fed meets 8-9 December', 'The Fed meeting starts on Tuesday 8 December', 'The Fed meets Tuesday 8 to 9 December']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);
 });
+test('the decision has one day, the meeting two', () => {
+  for (const t of ['Fed rate decision: Tuesday 8 December 2026', 'The Fed decides on 8 December', '8 December: Fed decision', "The Fed meeting's decision is 8 December"]) assert.ok(one(t, W50).block.length, t);
+  for (const t of ['The Fed meeting starts on 8 December, rate decision on 9 December', 'Fed rate decision, 8-9 December', 'Make your own decision before the Fed meets on 8 December']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);
+});
+test('a lowercase may is only the verb where it reads as one', () => {
+  const may = new Date('2027-05-03T00:00:00Z');
+  for (const t of ['NFP on 6 may 2027', 'NFP: 6 may.', 'NFP is 6 may so plan', '6 may jobs report', 'NFP on may 6', 'NFP may 6', 'NFP on the 6th of may']) assert.ok(one(t, may).block.length, t);
+  for (const t of ['NFP on 7 may 2027', 'Of 10 stops on NFP day, only 6 may survive', 'You may 2 times out of 3 skip NFP']) assert.deepEqual(one(t, may), { block: [], warn: [] }, t);
+});
+test('discouraging a prediction is not a market view', () => {
+  for (const t of ["NFP: 4 December. Don't bet that the dollar will rise.", 'Never try to predict a rate cut from the Fed', "Don’t assume the dollar will rally on NFP."]) assert.deepEqual(one(t, W49), { block: [], warn: [] }, t);
+  for (const t of ["Don't miss NFP: the dollar will rally", "Don't bet against NFP because the dollar will rise", "Don't guess, the dollar will rise after NFP", "NFP: don't bet against it, gold falls", "Don't expect the dollar to fall after NFP", 'The Fed will never hike: never a rate hike']) assert.ok(one(t, W49).block.length, t);
+});
 test('wrong dates, weekdays and market views are blocked', () => {
   for (const t of [
     'Jobs report, Friday 5 December', 'NFP on Dec 11th', 'NFP on 8 January', 'Jobs report: Thursday 4 December', 'Jobs report 4 December (Thursday)', 'NFP, 4 December 2027', 'US employment report: 5 December', 'jobs data out 5 December', 'Nonfarm payrolls, Fri 5 Dec', 'Jobs report: **5 December**',

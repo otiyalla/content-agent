@@ -106,12 +106,37 @@ const RELATIVE = new RegExp(
   'i',
 );
 
-/** Days an event's name may be dated: this week's if it has one, otherwise any listed. The Fed's first day counts. */
-function acceptedDays(name: EventName, monday: Date | undefined): Date[] {
+// "Don't bet that the dollar will rise" discourages a view. The clause ends where a new claim could start.
+// "Don't expect ..." isn't here: it is itself a prediction, and so is "don't bet against ...".
+const DISCOURAGED = /\b(?:don['’]t|do not|never|avoid|stop|can['’]t|cannot)\s+(?:ever\s+)?(?:try(?:ing)?\s+to\s+)?(?:bet|predict|guess|gambl|assum|forecast)(?:e|ing|ting)?\b(?!\s+against\b)(?:(?!\b(?:but|because|and|since|so|yet|as|while|instead|until|unless|before|after)\b)[^,;:.!?—–])*/gi;
+
+// Which of the Fed's two days a date is about.
+const FED_DAY = /(\b(?:rate|fed|fomc|reserve|policy|meeting)(?:['’]s)?\s+(?:decision|announcement)\b|\b(?:fed|fomc|reserve)\s+(?:decides|announces)\b)|\bmeet(?:s|ings?)?\b|\b(?:starts?|begins?)\b/gi;
+
+/** Whether the words nearest before a date (or, with none, first after it) are about the decision, not the meeting. */
+function datesDecision(sentence: string, at: number): boolean {
+  const all = [...sentence.matchAll(FED_DAY)];
+  const word = all.filter((m) => m.index! < at).pop() ?? all[0];
+  return !!word?.[1];
+}
+
+/** "Only 6 may survive" or "you may 2 ..." rather than the month. Only a lowercase "may" can be the verb. */
+function isModalMay(sentence: string, m: RegExpMatchArray): boolean {
+  const [whole, wdBefore, , d2, monthA, monthB, , d4, year, wdAfter] = m;
+  if ((monthA ?? monthB) !== 'may' || wdBefore || wdAfter || year || d2 || d4) return false;
+  const before = sentence.slice(0, m.index);
+  const after = sentence.slice(m.index! + whole.length);
+  if (monthB) return /\b(?:you|we|they|it|i|that|which|traders)\s+$/i.test(before);
+  if (/\d(?:st|nd|rd|th)\b|\bof\b/i.test(whole) || /\b(?:on|for|by|is|before|after|until|from|due|out|since)\s+$/i.test(before)) return false;
+  return /^\s+[a-z]/i.test(after) && !NAMES.some(([re]) => after.trimStart().search(re) === 0);
+}
+
+/** Days an event may be dated: this week's if it has one, otherwise any listed. The Fed's first day counts, except for its decision. */
+function acceptedDays(name: EventName, monday: Date | undefined, decisionOnly: boolean): Date[] {
   const mine = EVENTS.filter((e) => e.name === name);
   const thisWeek = monday ? weekEvents(monday).filter((e) => e.name === name) : [];
   const use = thisWeek.length ? thisWeek : mine;
-  return use.flatMap((e) => (name === 'Fed rate decision' ? [new Date(e.date.getTime() - DAY), e.date] : [e.date]));
+  return use.flatMap((e) => (name === 'Fed rate decision' && !decisionOnly ? [new Date(e.date.getTime() - DAY), e.date] : [e.date]));
 }
 
 /** Which events a post names. */
@@ -135,13 +160,14 @@ export function eventIssues(fields: string[], monday?: Date): { block: string[];
       for (const m of sentence.matchAll(DATE)) {
         const [whole, wdBefore, d1, d2, monthA, monthB, d3, d4, year, wdAfter] = m;
         const monthWord = monthA ?? monthB;
-        if (monthWord === 'may') continue; // "you may 2x", not the month
+        if (isModalMay(sentence, m)) continue;
         // With two events in a sentence, the date belongs to the nearest one.
         const name = found.reduce((a, b) => (Math.abs(b.at - m.index!) < Math.abs(a.at - m.index!) ? b : a)).name;
         const month = MONTHS.indexOf(monthWord.toLowerCase().slice(0, 3));
         const days = [d1 ?? d3, d2 ?? d4].filter(Boolean).map(Number);
+        const decisionOnly = days.length === 1 && datesDecision(sentence, m.index!);
         const matches = days.map((d) =>
-          acceptedDays(name, monday).find((a) => a.getUTCDate() === d && a.getUTCMonth() === month && (!year || a.getUTCFullYear() === Number(year))),
+          acceptedDays(name, monday, decisionOnly).find((a) => a.getUTCDate() === d && a.getUTCMonth() === month && (!year || a.getUTCFullYear() === Number(year))),
         );
         if (matches.some((x) => !x)) {
           block.push(`gives "${whole.trim()}" as a date for the ${name}; check src/instagram/events.ts`);
@@ -153,9 +179,9 @@ export function eventIssues(fields: string[], monday?: Date): { block: string[];
       const other = OTHER_DATE.exec(sentence);
       if (other) warn.push(`"${other[0].trim()}" next to the ${about} can't be checked; write the date like "4 December"`);
       const both = /\b(?:cut\w*|lower)\b.*\b(?:hike\w*|raise)\b|\b(?:hike\w*|raise)\b.*\b(?:cut\w*|lower)\b/i.test(sentence);
-      const outlook = HEDGE.test(sentence) || both ? null : OUTLOOK.exec(sentence);
+      const outlook = HEDGE.test(sentence) || both ? null : OUTLOOK.exec(sentence.replace(DISCOURAGED, ''));
       const near = [sentence, sentences[i - 1] ?? '', sentences[i + 1] ?? ''].filter((x) => !HEDGE.test(x));
-      const move = near.map((x) => DIRECTION.exec(x)).find(Boolean);
+      const move = near.map((x) => DIRECTION.exec(x.replace(DISCOURAGED, ''))).find(Boolean);
       const view = outlook ?? move;
       if (view) block.push(`"${view[0]}" next to the ${about}: reads as a market view`);
       const forecast = FORECAST.exec(sentence);

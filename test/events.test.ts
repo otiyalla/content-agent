@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { eventIssues, eventNotes, eventsRunOut, weekEvents } from '../src/instagram/events';
+import { eventIssues, eventNotes, eventsRunOut, lateForEvent, weekEvents } from '../src/instagram/events';
+import { qaPost } from '../src/instagram/qa';
 import { buildPrompt, checkPlan } from '../src/instagram/strategist';
 import { WEEKLY_SLOTS } from '../src/instagram/calendar';
 import type { WeekPlan } from '../src/instagram/types';
@@ -13,22 +14,54 @@ const prompt = (weekStart: Date) => buildPrompt({ weekLabel: 'x', slots: WEEKLY_
 test('each week gets its own events, with the right weekday', () => {
   assert.deepEqual(weekEvents(W49).map((e) => e.name), ['US jobs report (NFP)']);
   assert.match(prompt(W49), /# Market events this week[\s\S]*US jobs report \(NFP\): Friday,? 4 December/);
-  assert.match(eventNotes(W50), /Fed rate decision: Wednesday,? 9 December/);
-  assert.equal(eventNotes(QUIET), '');
+  assert.match(eventNotes(W50, WEEKLY_SLOTS), /Fed rate decision: Wednesday,? 9 December/);
+  assert.equal(eventNotes(QUIET, WEEKLY_SLOTS), '');
   assert.doesNotMatch(prompt(QUIET), /Market events/);
   for (let m = W49.getTime(); m < Date.UTC(2027, 11, 6); m += 7 * 86400_000) {
     for (const e of weekEvents(new Date(m))) assert.equal(e.date.getUTCDay(), e.name.startsWith('Fed') ? 3 : 5, e.date.toISOString());
   }
 });
-test('wrong dates and market views are blocked; risk notes pass', () => {
-  for (const t of ['The US jobs report is on Friday 4 December. Decide your rule now.', 'NFP: Dec 4. Spreads can widen.', 'Fed decision on 9 December: smaller size or stand aside?', 'I journal on 5 December.', 'Before the Fed, write 2 decisions down.', 'The Fed decision, Wednesday 9 Dec', 'Cut risk before the jobs report.']) {
-    assert.deepEqual(eventIssues(t), { block: [], warn: [] }, t);
+const one = (t: string, monday?: Date) => eventIssues([t], monday);
+test('risk notes and correct dates pass', () => {
+  for (const t of [
+    'The US jobs report is on Friday 4 December. Decide your rule now.', 'NFP: Dec 4. Spreads can widen.', 'Jobs report, Fri, 4 Dec 2026', 'NFP on December 4th (Friday)', 'I journal on 5 December.',
+    'Before the Fed, write 2 decisions down.', 'Cut risk before the jobs report.', 'You should cut risk before NFP. Size falls, so does the damage.', 'Decide today what you will do on jobs report day', 'Set your expectations for the jobs report: wider spreads',
+    'Converting USD to CAD on NFP day? Check your pip value.', 'Whatever the Fed does, rate cut or hike, keep your size', 'Rate cut or hike, the Fed is not your edge', 'If EURUSD falls through your stop on NFP, the fill can be worse.', 'A fed-up trader rests on 12 December', 'ECB rate decision: 17 December',
+    'Dollar risk drops when size drops. Do that before the jobs report.', 'Around the jobs report, spreads can widen and a stop can fill worse than its level.', 'You may 2x your caution before NFP', 'Before the jobs report, risk 1/2 of your usual',
+  ]) assert.deepEqual(one(t, W49), { block: [], warn: [] }, t);
+  for (const t of ['Fed decision on 9 December: smaller size or stand aside?', 'The Fed decision, Wednesday 9 Dec', 'Fed meeting, December 8-9', 'The Fed meets 8-9 December', 'The Fed meeting starts on Tuesday 8 December', 'The Fed meets Tuesday 8 to 9 December']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);
+});
+test('wrong dates, weekdays and market views are blocked', () => {
+  for (const t of [
+    'Jobs report, Friday 5 December', 'NFP on Dec 11th', 'NFP on 8 January', 'Jobs report: Thursday 4 December', 'Jobs report 4 December (Thursday)', 'NFP, 4 December 2027', 'US employment report: 5 December', 'jobs data out 5 December', 'Nonfarm payrolls, Fri 5 Dec', 'Jobs report: **5 December**',
+    'A bullish jobs report is coming', 'After NFP the dollar will rally', 'NFP will push EURUSD higher', 'A strong jobs report lifts the dollar', 'Expect a beat on payrolls', 'The jobs report is 4 December. The dollar will rally after it.', 'Gold falls. The jobs report does that.',
+  ]) assert.ok(one(t, W49).block.length, t);
+  for (const t of ['The Fed meets 4 December', 'Fed meeting, 9-10 December', 'Interest rate decision on 10 December', 'Fed decision, Thursday 9 December', 'The Fed will cut rates', 'The Fed is expected to hold', 'Jobs report 9 December, Fed 4 December', 'A rate hike from the Fed is coming']) assert.ok(one(t, W50).block.length, t);
+});
+test('slips that cannot be judged are only warnings', () => {
+  for (const t of ['Consensus for the jobs report is 150k', 'The jobs report is tomorrow', "Tomorrow's jobs report", 'NFP this Friday: plan ahead', 'Jobs report: 12/5', 'The jobs report is on the 5th']) {
+    const { block, warn } = one(t, W49);
+    assert.deepEqual([block.length, warn.length], [0, 1], t);
   }
-  for (const t of ['Jobs report, Friday 5 December', 'NFP on Dec 11th', 'The Fed meets 4 December', 'A bullish jobs report is coming', 'The Fed will cut rates', 'After NFP the dollar will rally']) {
-    assert.ok(eventIssues(t).block.length, t);
-  }
-  assert.equal(eventIssues('Consensus for the jobs report is 150k').warn.length, 1);
-  assert.equal(eventIssues('The jobs report is tomorrow').warn.length, 1);
+});
+test('each field is read on its own', () => {
+  assert.deepEqual(eventIssues(['Before the jobs report', 'Write your journal by 2 December'], W49), { block: [], warn: [] });
+});
+test('only slots before the event are offered, and a late one is flagged', () => {
+  const fed = eventNotes(W50, WEEKLY_SLOTS);
+  assert.match(fed, /Pre-Trade Check \(tue\)/);
+  assert.doesNotMatch(fed, /Trader's Mind|Inside Zenlot|Weekend Review/);
+  assert.match(eventNotes(W49, WEEKLY_SLOTS), /Trader's Mind \(thu\)/);
+  assert.equal(lateForEvent(['Fed decision'], W50, WEEKLY_SLOTS[3]).length, 1);
+  assert.equal(lateForEvent(['Fed decision'], W50, WEEKLY_SLOTS[1]).length, 0);
+  assert.equal(lateForEvent(['Trade less'], W50, WEEKLY_SLOTS[3]).length, 0);
+});
+test('a hand-edited caption or alt text is checked again before publishing', async () => {
+  const slides = [{ layout: 'cover', kicker: 'k', title: 'Check the calendar', body: 'Know the date.', stat: '', items: [], screen: '', theme: 'dark' }];
+  const qa = (caption: string, altText: string) => qaPost({ slides, caption: `${caption} Not financial advice.`, altText, scheduledAt: '2026-12-01T13:00:00Z' } as unknown as Parameters<typeof qaPost>[0]);
+  assert.ok((await qa('Jobs report: 5 December.', 'x')).blocking.some((b) => b.includes('5 December')));
+  assert.ok((await qa('Fine.', 'Slide about the jobs report on 5 December')).blocking.some((b) => b.includes('5 December')));
+  assert.ok(!(await qa('Jobs report: 4 December.', 'x')).blocking.some((b) => b.includes('December')));
 });
 test('the plan email says when dates run out', () => {
   assert.deepEqual(eventsRunOut(W49), []);
@@ -40,7 +73,7 @@ test('a post with a wrong event date is held, and the rest of the week is not', 
     slides: [{ layout: 'cover', kicker: 'k', title: 'Check the calendar first', body: 'Know the date.', stat: '', items: [], screen: '', theme: 'dark' }],
   });
   const plan = { theme: 'x', posts: [post(1, 'Jobs report: 5 December.'), post(3, 'Jobs report: 4 December.')] } as unknown as WeekPlan;
-  const { posts } = await checkPlan(plan, WEEKLY_SLOTS);
+  const { posts } = await checkPlan(plan, WEEKLY_SLOTS, W49);
   assert.ok(posts[0].held.some((h) => h.includes('5 December')));
   assert.ok(!posts[1].held.some((h) => h.includes('December')));
 });

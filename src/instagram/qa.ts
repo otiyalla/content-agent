@@ -1,6 +1,8 @@
 import zlib from 'zlib';
 import { lintCopy } from '../content/brand-guard';
 import { loadFonts } from './brand';
+import { mondayOf } from './calendar';
+import { eventIssues, postFields } from './events';
 import { layoutIssues } from './layout-check';
 import { mathIssues } from './math-check';
 import { SCREENS } from './screens';
@@ -18,6 +20,7 @@ import type { Slide } from './types';
 // 4. Maths check: sums, recovery and streak figures recomputed (math-check.ts).
 // 5. Screen figures: a worked example must match the app screen it sits next
 //    to, or the screen slide must say what the screen's figures are.
+// 6. Market events: no wrong dates or market views beside a named event (events.ts).
 // ---------------------------------------------------------------------------
 
 /** Reads the set of code points a WOFF font can draw. */
@@ -210,8 +213,8 @@ export interface PostQa {
  * otherwise fixes are only reported (the renderer applies them on the fly).
  */
 export async function qaPost(
-  post: { slides: Slide[]; caption: string; altText?: string },
-  opts: { fix?: boolean } = {},
+  post: { slides: Slide[]; caption: string; altText?: string; scheduledAt?: string },
+  opts: { fix?: boolean; weekStart?: Date } = {},
 ): Promise<PostQa> {
   const { body, mono } = fontCoverage();
   const fixes: string[] = [];
@@ -242,6 +245,8 @@ export async function qaPost(
   }
   blocking.push(...mathIssues(post));
   blocking.push(...screenFigureIssues(post.slides));
+  const week = opts.weekStart ?? (post.scheduledAt ? mondayOf(new Date(post.scheduledAt)) : undefined);
+  blocking.push(...eventIssues(postFields(post), week).block);
 
   for (const issue of lintCopy(post.caption)) blocking.push(`caption: ${issue}`);
   if (!/not financial advice/i.test(post.caption)) blocking.push('caption: missing "not financial advice" line');

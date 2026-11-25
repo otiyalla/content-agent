@@ -37,7 +37,9 @@ The steps only a person can do are in [FIRST-FOLLOWERS.md](FIRST-FOLLOWERS.md).
 
 Year-end and new-year weeks get seasonal guidance automatically (`src/instagram/seasonal.ts`). Weeks with a US jobs
 report or Fed decision get a dated risk note (`src/instagram/events.ts`), never a market view. A post that gives the
-wrong date or a view is held. Dates run to November and December 2027; the plan email says when to add more.
+wrong date, or a market view in wording the check knows, is held, also after a hand edit; your approval is still the
+real check. The dates are a fixed list: compare them with the official pages when an event week comes up. They run
+to November and December 2027; the plan email says when to add more.
 
 ## Reviewing and vetoing posts
 

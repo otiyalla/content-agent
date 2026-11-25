@@ -148,7 +148,15 @@ async function main() {
   let failures = 0;
 
   for (const week of weeks) {
-    const cal = loadCalendar(week);
+    let cal: WeekCalendar | null;
+    try {
+      cal = loadCalendar(week);
+    } catch (err) {
+      // One broken file must not stop the other week.
+      failures++;
+      console.error(`  ❌ ${week} can't be read: ${err instanceof Error ? err.message : err}`);
+      continue;
+    }
     if (!cal) continue;
     let changed = false;
 

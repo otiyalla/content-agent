@@ -96,7 +96,12 @@ function fileFor(week: string): string {
 export function loadCalendar(week: string): WeekCalendar | null {
   const file = fileFor(week);
   if (!fs.existsSync(file)) return null;
-  return JSON.parse(fs.readFileSync(file, 'utf8')) as WeekCalendar;
+  const cal = JSON.parse(fs.readFileSync(file, 'utf8')) as WeekCalendar;
+  if (!Array.isArray(cal?.posts)) throw new Error(`${week}.json has no list of posts`);
+  // A hand edit can leave a null or stray text in the list. It must not stop the real posts.
+  const posts = cal.posts.filter((p: unknown) => typeof p === 'object' && p !== null);
+  if (posts.length < cal.posts.length) console.error(`❌ ${week}.json has ${cal.posts.length - posts.length} entry that isn't a post; ignored`);
+  return { ...cal, posts };
 }
 
 export function saveCalendar(cal: WeekCalendar): string {

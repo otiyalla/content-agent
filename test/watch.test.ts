@@ -49,9 +49,9 @@ test('while the owner is away only a stopped Worker is reported', async () => {
   try {
     globalThis.fetch = (async () => Response.json({ workflow_runs: [] })) as typeof fetch;
     const found = await watchProblems(new Date('2040-01-04T20:00:00Z'), true);
-    assert.ok(found.length === 1 && found[0].includes('Worker has started no job'));
+    assert.ok(found.workerStopped && found.problems.length === 1 && found.problems[0].includes('Worker has started no job'));
     globalThis.fetch = (async () => Response.json({ workflow_runs: [{ created_at: '2040-01-04T19:37:00Z' }] })) as typeof fetch;
-    assert.deepEqual(await watchProblems(new Date('2040-01-04T20:00:00Z'), true), []);
+    assert.deepEqual(await watchProblems(new Date('2040-01-04T20:00:00Z'), true), { problems: [], workerStopped: false });
   } finally {
     globalThis.fetch = real;
     for (const [k, v] of Object.entries(keep)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
@@ -85,9 +85,9 @@ test('the watchdog says when IG_LIVE is off', async () => {
   const keep = { ...process.env };
   Object.assign(process.env, { GITHUB_ACTIONS: 'true', IG_LIVE: '', GITHUB_REPOSITORY: '', GITHUB_TOKEN: '' });
   try {
-    assert.match((await watchProblems(new Date('2040-01-04T20:00:00Z')))[0], /IG_LIVE is not "true"/);
+    assert.match((await watchProblems(new Date('2040-01-04T20:00:00Z'))).problems[0], /IG_LIVE is not "true"/);
     process.env.IG_LIVE = 'true';
-    assert.doesNotMatch((await watchProblems(new Date('2040-01-04T20:00:00Z')))[0], /IG_LIVE/);
+    assert.doesNotMatch((await watchProblems(new Date('2040-01-04T20:00:00Z'))).problems[0], /IG_LIVE/);
   } finally {
     process.env = keep;
   }
@@ -156,14 +156,38 @@ test('the watchdog notices a silent Worker', async () => {
   const check = async (body: unknown, status = 200) => {
     globalThis.fetch = (async () => Response.json(body, { status })) as typeof fetch;
     try {
-      return await workerProblem(at('25T20:00'), 'o/r', 't');
+      return await workerProblem(at('25T20:00'), { repo: 'o/r', token: 't', pauseMs: 0 });
     } finally {
       globalThis.fetch = real;
     }
   };
   assert.equal(await check({ workflow_runs: [{ created_at: '2026-11-25T18:07:00Z' }] }), null);
-  assert.match((await check({ workflow_runs: [{ created_at: '2026-11-24T13:07:00Z' }] }))!, /started no job since 2026-11-24/);
-  assert.match((await check({ workflow_runs: [] }))!, /records began/);
-  assert.match((await check({}, 403))!, /403/);
-  assert.equal(await workerProblem(at('25T20:00'), '', ''), null);
+  assert.match((await check({ workflow_runs: [{ created_at: '2026-11-24T13:07:00Z' }] }))!.problem, /started no job since 2026-11-24/);
+  assert.match((await check({ workflow_runs: [] }))!.problem, /records began/);
+  assert.deepEqual(await check({}, 403), { problem: 'Could not check whether the Worker is starting jobs (GitHub answered 403).', confirmed: false });
+  let n = 0;
+  globalThis.fetch = (async () => (++n < 3 ? Response.json({}, { status: 502 }) : Response.json({ workflow_runs: [{ created_at: '2026-11-25T18:07:00Z' }] }))) as typeof fetch;
+  try {
+    assert.equal(await workerProblem(at('25T20:00'), { repo: 'o/r', token: 't', pauseMs: 0 }), null); // a passing error is not a warning
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.equal(await workerProblem(at('25T20:00'), { repo: '', token: '' }), null);
+});
+test('a broken calendar never hides a stopped Worker', async () => {
+  const real = globalThis.fetch;
+  const keep = { GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY, GITHUB_TOKEN: process.env.GITHUB_TOKEN };
+  Object.assign(process.env, { GITHUB_REPOSITORY: 'o/r', GITHUB_TOKEN: 't' });
+  globalThis.fetch = (async () => Response.json({ workflow_runs: [] })) as typeof fetch;
+  try {
+    const unreadable = () => { throw new Error('no list of posts'); };
+    const oddList = () => ({ posts: {} }) as never; // gets past loading, so the check itself throws
+    for (const [load, expected] of [[unreadable, 'could not be read'], [oddList, 'check itself failed']] as const) {
+      const { problems: found } = await watchProblems(at('25T20:00'), false, load);
+      assert.ok(found.some((f) => f.includes(expected)) && found.some((f) => f.includes('Worker has started no job')), found.join());
+    }
+  } finally {
+    globalThis.fetch = real;
+    for (const [k, v] of Object.entries(keep)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
 });

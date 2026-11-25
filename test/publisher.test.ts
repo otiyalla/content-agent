@@ -46,6 +46,8 @@ test('every kind of missed post is emailed once, and retried if the email fails'
   const file = path.join(dir, 'content/instagram/calendar/2026-W48.json');
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const posts = [
+    null,
+    'stray',
     post('late', { scheduledAt: '2026-11-23T13:00:00.000Z' }),
     post('undated', { scheduledAt: 'soon' }),
     post('third', { status: 'failed', attempts: 2 }),
@@ -53,7 +55,8 @@ test('every kind of missed post is emailed once, and retried if the email fails'
     post('future', { scheduledAt: '2026-11-27T13:00:00.000Z' }),
   ];
   fs.writeFileSync(file, JSON.stringify({ week: '2026-W48', theme: 't', generatedAt: '', posts }));
-  const read = (id: string) => JSON.parse(fs.readFileSync(file, 'utf8')).posts.find((p: { id: string }) => p.id === id);
+  const read = (id: string) => JSON.parse(fs.readFileSync(file, 'utf8')).posts.find((p: { id?: string } | null) => p?.id === id);
+  fs.writeFileSync(path.join(path.dirname(file), '2026-W47.json'), '{"week":"2026-W47","posts":{}}'); // last week's file is broken: this week still runs
   const subjects: string[] = [];
   const server = mailServer(subjects);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

@@ -147,7 +147,7 @@
     {
       "id": "2026-W48-wed",
       "scheduledAt": "2026-11-25T13:00:00.000Z",
-      "status": "scheduled",
+      "status": "published",
       "pillar": "psychology",
       "topic": "Losing streaks are statistically normal; the reaction to them is the real danger",
       "slides": [
@@ -235,7 +235,21 @@
       "rationale": "No historical data yet, so this deliberately tests the psychology pillar with a reassuring, contrarian hook aimed at our core pain point (traders who blew accounts by revenge trading). It's highly shareable because readers send it to friends mid-drawdown. It links Monday's drawdown maths to behaviour, and all probabilities are shown (0.6^5, 0.99^5).",
       "previewHash": "127691381dcf7d9f",
       "previewedAt": "2026-11-23T03:54:14.866Z",
-      "previewRenderHash": "f10351c27272dd2e"
+      "previewRenderHash": "f10351c27272dd2e",
+      "published": {
+        "mediaId": "18199100539393178",
+        "permalink": "https://www.instagram.com/p/DgKmg4jjrtt/",
+        "publishedAt": "2026-11-25T13:08:30.195Z",
+        "imageUrls": [
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/1-beaf7644c405.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/2-a762a96b593d.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/3-a33cb39fb2ed.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/4-f1421ae309e9.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/5-496341d9ade1.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/6-899fecea81e5.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-wed/7-062aa8f0af18.jpg"
+        ]
+      }
     },
     {
       "id": "2026-W48-thu",

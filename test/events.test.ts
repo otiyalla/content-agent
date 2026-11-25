@@ -40,6 +40,14 @@ test('an outlook in the next sentence counts', () => {
   for (const t of ['Fed decision: 9 December. A rate cut is coming.', 'Dovish times ahead! Fed decision: 9 December.']) assert.ok(one(t, W50).block.length, t);
   for (const t of ['Fed decision: 9 December. Rate cut or hike, keep your size.', "Fed decision: 9 December. Don't bet on a rate cut.", 'Fed decision: 9 December. Whether a rate cut comes or not, keep your size.', 'Fed decision: 9 December. Rate cut? Rate hike? Same rule.']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);
 });
+test('with two events, a date goes with its own clause', () => {
+  for (const t of ['US jobs report is scheduled for Friday 4 December, Fed decision on 9 December.', 'On 4 December, the jobs report, and on 9 December, the Fed decision', 'Jobs report, 4 December; Fed decision, 9 December', 'The jobs report is on 4 December and the Fed decision is on 9 December', '4 December brings NFP before the Fed on 9 December', 'The Fed decides on 9 December after the jobs report on 4 December']) assert.deepEqual(one(t), { block: [], warn: [] }, t);
+  for (const t of ['US jobs report is scheduled for 9 December, Fed decision on 4 December.', 'Jobs report, 9 December; Fed decision, 4 December']) assert.ok(one(t).block.length, t);
+});
+test('a hedge covers only its own claim', () => {
+  for (const t of ['The dollar will rise, so check if your size is right', 'The dollar will rise no matter what', 'Check if your size is right because the dollar will rise', 'A rate cut is coming, so cut size and raise cash', 'The dollar will rise, whatever happens']) assert.ok(one(`Fed decision: 9 December. ${t}.`, W50).block.length, t);
+  for (const t of ['If the dollar falls through your stop, the fill can be worse', 'Suppose gold falls 50 pips', 'For example, gold falls and your stop slips', 'Illustrative: the dollar falls 50 pips', 'Your stop can slip if gold falls', 'Cut, hold or hike, keep your size']) assert.deepEqual(one(`Fed decision: 9 December. ${t}.`, W50), { block: [], warn: [] }, t);
+});
 test('the decision has one day, the meeting two', () => {
   for (const t of ['Fed rate decision: Tuesday 8 December 2026', 'The Fed decides on 8 December', '8 December: Fed decision', "The Fed meeting's decision is 8 December"]) assert.ok(one(t, W50).block.length, t);
   for (const t of ['The Fed meeting starts on 8 December, rate decision on 9 December', 'Fed rate decision, 8-9 December', 'Make your own decision before the Fed meets on 8 December']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);

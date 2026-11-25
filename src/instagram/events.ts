@@ -97,9 +97,11 @@ const OUTLOOK = new RegExp(
   ].join('|'),
   'i',
 );
-// "Whatever the Fed does, cut or hike" and hypotheticals take no side.
+// "Whatever the Fed does, cut or hike" and hypotheticals take no side. A hedge covers only the claim it introduces.
 const HEDGE = /\b(?:if|whether|whatever|whichever|either|hypothetical|illustrative|example|suppose|no matter)\b/i;
-const BOTH_WAYS = /\b(?:cut\w*|lower)\b.*\b(?:hike\w*|raise)\b|\b(?:hike\w*|raise)\b.*\b(?:cut\w*|lower)\b/i;
+const HEDGE_FIRST = /^\W*(?:(?:and|or|but|so|even|for|an?|in|as)\s+)*(?:if|whether|whatever|whichever|either|hypothetical|illustrative|example|suppose|no matter)\b|\b(?:hypothetical|illustrative|example)\b/i;
+const CLAUSE_END = /[,;:–—]\s+|\s+(?=(?:so|but|because|and|while|yet)\s)/i;
+const BOTH_WAYS = /\b(?:rate\s+)?(?:cut|hike|raise|lower|hold)s?(?:(?:\s*[,\/]\s*|\s*,?\s+(?:or|and|nor)\s+)(?:an?\s+)?(?:rate\s+)?(?:cut|hike|raise|lower|hold)s?\b)+/gi;
 const FORECAST = /\b(?:forecasts?|consensus|expected (?:number|figure|print))\b/i;
 const EVENT_WORD = '(?:report|data|nfp|payrolls|decision|meeting|fed|fomc)';
 const RELATIVE = new RegExp(
@@ -110,6 +112,37 @@ const RELATIVE = new RegExp(
 // "Don't bet that the dollar will rise" discourages a view. The clause ends where a new claim could start.
 // "Don't expect ..." isn't here: it is itself a prediction, and so is "don't bet against ...".
 const DISCOURAGED = /\b(?:don['’]t|do not|never|avoid|stop|can['’]t|cannot)\s+(?:ever\s+)?(?:try(?:ing)?\s+to\s+)?(?:bet|predict|guess|gambl|assum|forecast)(?:e|ing|ting)?\b(?!\s+against\b)(?:(?!\b(?:but|because|and|since|so|yet|as|while|instead|until|unless|before|after)\b)[^,;:.!?—–])*/gi;
+
+/** The first unhedged market view in a sentence. */
+function marketView(sentence: string): string | undefined {
+  const text = sentence.replace(DISCOURAGED, '').replace(BOTH_WAYS, '');
+  if (/^\W*(?:a\s+)?rate\s+(?:cut|hike)\?/i.test(text)) return undefined;
+  let covered = false; // the clause before opened with a hedge: "If your stop is hit, ..."
+  for (const clause of text.split(CLAUSE_END)) {
+    const opens = HEDGE_FIRST.test(clause);
+    if (!opens && !covered) {
+      const m = OUTLOOK.exec(clause) ?? DIRECTION.exec(clause);
+      const hedge = m && HEDGE.exec(clause);
+      // "the dollar may fall if ..." is hedged; "the dollar will fall whatever happens" isn't.
+      if (m && !(hedge && (hedge.index < m.index || /^(?:if|whether)$/i.test(hedge[0])))) return m[0];
+    }
+    covered = opens;
+  }
+  return undefined;
+}
+
+/** The event a date in `sentence` belongs to: one in its own clause (before it, or else after it), or else the one before. */
+function eventForDate(sentence: string, at: number, end: number, found: Array<{ name: EventName; at: number }>): EventName {
+  const clauseStart = Math.max(0, ...[...sentence.slice(0, at).matchAll(/[,;:–—]\s|\s(?:and|but|while)\s/gi)].map((m) => m.index! + m[0].length));
+  const stop = sentence.slice(end).search(/[,;:–—]\s|\s(?:and|but|while)\s/i);
+  const clauseEnd = stop < 0 ? sentence.length : end + stop;
+  const before = found.filter((f) => f.at < at).sort((a, b) => b.at - a.at)[0];
+  const after = found.filter((f) => f.at >= end).sort((a, b) => a.at - b.at)[0];
+  if (before && before.at >= clauseStart) return before.name;
+  if (after && (after.at < clauseEnd || !before)) return after.name;
+  // "Jobs report, 4 December" looks back; "..., and on 9 December, the Fed decision" looks ahead.
+  return after && /^(?:and\s+)?(?:then\s+)?on\s+$/i.test(sentence.slice(clauseStart, at)) ? after.name : before!.name;
+}
 
 // Which of the Fed's two days a date is about.
 const FED_DAY = /(\b(?:rate|fed|fomc|reserve|policy|meeting)(?:['’]s)?\s+(?:decision|announcement)\b|\b(?:fed|fomc|reserve)\s+(?:decides|announces)\b)|\bmeet(?:s|ings?)?\b|\b(?:starts?|begins?)\b/gi;
@@ -177,8 +210,7 @@ export function eventIssues(fields: string[], monday?: Date): { block: string[];
         const at = m.index!;
         const lead = sentence.slice(end, at);
         end = at + whole.length;
-        // With two events in a sentence, the date belongs to the nearest one.
-        const { name } = found.reduce((x, y) => (Math.abs(y.at - at) < Math.abs(x.at - at) ? y : x));
+        const name = eventForDate(sentence, at, end, found);
         const month = MONTHS.indexOf((monthA ?? monthB).toLowerCase().slice(0, 3));
         const days = [d1 ?? d3, d2 ?? d4].filter(Boolean).map(Number);
         const decisionOnly = days.length === 1 && datesDecision(sentence, at);
@@ -202,9 +234,8 @@ export function eventIssues(fields: string[], monday?: Date): { block: string[];
       const other = OTHER_DATE.exec(sentence);
       if (other) warn.push(`"${other[0].trim()}" next to the ${about} can't be checked; write the date like "4 December"`);
       // A claim in the sentence before or after counts too.
-      const near = [sentence, sentences[i - 1] ?? '', sentences[i + 1] ?? ''].filter((x) => !HEDGE.test(x)).map((x) => x.replace(DISCOURAGED, ''));
-      const view = near.map((x) => (BOTH_WAYS.test(x) || /^\W*(?:a\s+)?rate\s+(?:cut|hike)\?/i.test(x) ? null : OUTLOOK.exec(x)) ?? DIRECTION.exec(x)).find(Boolean);
-      if (view) block.push(`"${view[0]}" next to the ${about}: reads as a market view`);
+      const view = [sentence, sentences[i - 1] ?? '', sentences[i + 1] ?? ''].map(marketView).find(Boolean);
+      if (view) block.push(`"${view}" next to the ${about}: reads as a market view`);
       const forecast = FORECAST.exec(sentence);
       if (forecast) warn.push(`mentions "${forecast[0]}" next to the ${about}; risk process only`);
       if (RELATIVE.test(sentence)) warn.push(`dates the ${about} relative to now; give the date, because posts can run late`);

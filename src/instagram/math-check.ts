@@ -280,15 +280,27 @@ function comparable(left: Token[], res: Num): boolean {
   }
 }
 
+/** Whether the sum itself turns a fraction into a percentage: "3 ÷ 7 x 100". Dividing by 100 doesn't count. */
+function timesHundred(left: Token[]): boolean {
+  let depth = 0;
+  return left.some((t, i) => {
+    if (t.op === '(') depth++;
+    if (t.op === ')') depth--;
+    if (depth || t.kind !== 'num' || t.pct || t.value !== 100) return false;
+    return left[i - 1]?.op === '*' || (i === 0 && left[1]?.op === '*');
+  });
+}
+
+const LOSS_CONTEXT = /\b(?:loss(?:es)?|lose[sr]?|losers|losing|lost|drawdown|down|stopped|stops?\s+(?:\w+\s+)?hit|(?:more|another)\s+stops?)\b/i;
+
 /** Values the left side may mean, in the units the result is written in. */
-function candidates(left: Token[], res: Num, sign: string): number[] {
+function candidates(left: Token[], res: Num, sign: string, aboutLosses: boolean): number[] {
   const values = [evaluate(left, false), evaluate(left, true)].filter((v): v is number => v !== null);
   const out: number[] = [];
   const addsOnly = !hasOp(left, '*', '/', '^');
   for (const v of values) {
     out.push(res.pct ? v * 100 : v);
-    const hundred = nums(left).some((n) => n.value === 100 && !n.pct);
-    if (res.pct && (hundred || (addsOnly && !nums(left).some((n) => n.pct)))) out.push(v); // "3 ÷ 7 x 100 = 42.9%"
+    if (res.pct && (timesHundred(left) || (addsOnly && !nums(left).some((n) => n.pct)))) out.push(v); // "3 ÷ 7 x 100 = 42.9%"
     if (!res.pct && !res.unit && addsOnly && nums(left).every((n) => n.pct)) out.push(v * 100); // "70% - 30% = 40 points"
     if (res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip')) {
       if (nums(left).every((n) => n.pct)) out.push(v * 100);
@@ -296,8 +308,8 @@ function candidates(left: Token[], res: Num, sign: string): number[] {
       for (const perUnit of [1, 10, 100, 10000]) out.push(Math.abs(v) * perUnit);
     }
   }
-  // "3 losses x 1% = -3%", "1% + 1% = -2%": the minus marks a loss. Not once a minus or division is involved.
-  if (sign === '-' && !hasOp(left, '-', '/')) out.push(...out.map((v) => -v));
+  // "3 losses x 1% = -3%", "1% + 1% = -2%": the minus marks a loss, when the text says so.
+  if (aboutLosses && sign === '-' && !hasOp(left, '-', '/')) out.push(...out.map((v) => -v));
   return out;
 }
 
@@ -310,7 +322,8 @@ const LIST_MARK = /^\s*(?:[-+*•]\s+|\d+[.)]\s+|\d+\/\d*\s+(?=[^\s\-+*/×÷x=~^
 
 function checkEquations(text: string): string[] {
   const issues: string[] = [];
-  for (const raw of clean(text).split('\n')) {
+  const lines = clean(text).split('\n');
+  for (const [n, raw] of lines.entries()) {
     const line = raw.replace(LIST_MARK, '');
     const signs = [...line.matchAll(/(?<![<>!=])=(?![=>])|~|\bequals\b/gi)];
     signs.forEach((m) => {
@@ -350,14 +363,21 @@ function checkEquations(text: string): string[] {
       if (!comparable(left, num)) return;
 
       const scale = num.raw && num.value ? (num.value * (num.pct ? 100 : 1)) / toNumber(num.raw) : 1; // 1000 for "5k"
-      const options = candidates(left, num, sign).map((v) => v / scale);
+      const options = candidates(left, num, sign, LOSS_CONTEXT.test(`${lines[n - 1] ?? ''}\n${line}`)).map((v) => v / scale);
       const negative = sign === '-';
-      if (options.some((v) => matches(negative ? -v : v, num.raw, approx))) return;
+      const right = rightRun.filter((t) => t.kind !== 'label');
+      const rightValue = isSum(right) ? evaluate(right, false) : null;
+      // A dash then words may be prose ("= 0.2R - 60% of the time"); any other complete sum is judged as a whole.
+      const proseDash = right[res.next]?.op === '-' && /^\s*[a-z]/i.test(after.slice(rightRun[rightRun.length - 1].end));
+      const whole = rightValue !== null && !proseDash;
+      // "3 ÷ 7 = 0.43 x 100 = 43%": the x 100 only turns the result into a percentage.
+      const toPercent = timesHundred(right) && /^\s*[=~]\s*[-+]?[\d.]+\s*%/.test(after.slice(rightRun[rightRun.length - 1].end));
+      if (toPercent && rightValue !== null && Math.abs(rightValue / 100 - value) <= Math.abs(value) * 0.01) return;
+      if (!whole && options.some((v) => matches(negative ? -v : v, num.raw, approx))) return;
 
       if (/^\s+x\s+[a-z]/i.test(after.slice(rightRun[rightRun.length - 1].end))) return; // "= 2 x your size"
 
       // The right-hand side may be a sum of its own: "(0.4 x 2) - (0.6 x 1) = 0.8 - 0.6 = +0.2R", or a range.
-      const right = rightRun.filter((t) => t.kind !== 'label');
       const range = right.length >= 3 && right[res.next]?.op === '-' && right[res.next + 1]?.kind === 'num' ? right[res.next + 1] : null;
       if (range && range.start === right[res.next].end) {
         const lo = toNumber(num.raw);
@@ -369,8 +389,8 @@ function checkEquations(text: string): string[] {
         // Unfinished ("= 2 x your stop"): can't be judged.
         const last = right[right.length - 1];
         if (isOperator(last) && last.op !== '-') return;
-        // Take the longest part that parses.
-        for (let end = right.length; end > res.next; end--) {
+        // The whole of it, or if that doesn't parse or may run into prose, the longest part that does.
+        for (let end = right.length; end > (whole ? right.length - 1 : res.next); end--) {
           const part = right.slice(0, end);
           const v = isSum(part) ? evaluate(part, false) : null;
           if (v === null) continue;
@@ -381,7 +401,7 @@ function checkEquations(text: string): string[] {
         }
       }
       const shownLeft = line.slice(from, m.index).trim();
-      const sumShown = right.length > res.next && isSum(right) && evaluate(right, false) !== null;
+      const sumShown = right.length > res.next && rightValue !== null;
       const shownRight = after.slice(0, sumShown ? rightRun[rightRun.length - 1].end : num.end).trim();
       issues.push(`maths: "${shownLeft} ${m[0]} ${shownRight}" but it works out to ${fmt(options[0] * scale)}${num.pct ? '%' : num.unit === 'R' ? 'R' : ''}`);
     });

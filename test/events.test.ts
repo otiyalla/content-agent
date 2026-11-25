@@ -31,6 +31,15 @@ test('risk notes and correct dates pass', () => {
   ]) assert.deepEqual(one(t, W49), { block: [], warn: [] }, t);
   for (const t of ['Fed decision on 9 December: smaller size or stand aside?', 'The Fed decision, Wednesday 9 Dec', 'Fed meeting, December 8-9', 'The Fed meets 8-9 December', 'The Fed meeting starts on Tuesday 8 December', 'The Fed meets Tuesday 8 to 9 December']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);
 });
+test('a date about something else is not the event date', () => {
+  for (const t of ['Before NFP on 4 December, review your 3 December trades.', 'Review your 3 December trades before NFP', 'Before NFP on 4 December, finish the plan by 2 December', 'Finish the plan by 2 December, before NFP on 4 December']) assert.deepEqual(one(t, W49), { block: [], warn: [] }, t);
+  for (const t of ['NFP on 4 December, or 5 December', 'Jobs report 4 December, NFP day 5 December', 'NFP is 4 December, it lands 5 December', 'Review the plan on 3 December, NFP day']) assert.ok(one(t, W49).block.length, t);
+  assert.ok(one('The Fed meeting starts on 8 December, decision on 10 December', W50).block.length);
+});
+test('an outlook in the next sentence counts', () => {
+  for (const t of ['Fed decision: 9 December. A rate cut is coming.', 'Dovish times ahead! Fed decision: 9 December.']) assert.ok(one(t, W50).block.length, t);
+  for (const t of ['Fed decision: 9 December. Rate cut or hike, keep your size.', "Fed decision: 9 December. Don't bet on a rate cut.", 'Fed decision: 9 December. Whether a rate cut comes or not, keep your size.', 'Fed decision: 9 December. Rate cut? Rate hike? Same rule.']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);
+});
 test('the decision has one day, the meeting two', () => {
   for (const t of ['Fed rate decision: Tuesday 8 December 2026', 'The Fed decides on 8 December', '8 December: Fed decision', "The Fed meeting's decision is 8 December"]) assert.ok(one(t, W50).block.length, t);
   for (const t of ['The Fed meeting starts on 8 December, rate decision on 9 December', 'Fed rate decision, 8-9 December', 'Make your own decision before the Fed meets on 8 December']) assert.deepEqual(one(t, W50), { block: [], warn: [] }, t);

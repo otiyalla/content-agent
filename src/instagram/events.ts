@@ -99,6 +99,7 @@ const OUTLOOK = new RegExp(
 );
 // "Whatever the Fed does, cut or hike" and hypotheticals take no side.
 const HEDGE = /\b(?:if|whether|whatever|whichever|either|hypothetical|illustrative|example|suppose|no matter)\b/i;
+const BOTH_WAYS = /\b(?:cut\w*|lower)\b.*\b(?:hike\w*|raise)\b|\b(?:hike\w*|raise)\b.*\b(?:cut\w*|lower)\b/i;
 const FORECAST = /\b(?:forecasts?|consensus|expected (?:number|figure|print))\b/i;
 const EVENT_WORD = '(?:report|data|nfp|payrolls|decision|meeting|fed|fomc)';
 const RELATIVE = new RegExp(
@@ -131,6 +132,19 @@ function isModalMay(sentence: string, m: RegExpMatchArray): boolean {
   return /^\s+[a-z]/i.test(after) && !NAMES.some(([re]) => after.trimStart().search(re) === 0);
 }
 
+const EVENT_DATE_WORD = /\b(?:report|data|numbers|release|decision|decides|announce\w*|meet(?:s|ings?)?|starts?|begins?|ends?|lands?|due|out|moved|event|it(?:['’]s)?)\b/i;
+
+/** "your 3 December trades": a date that says what else it is about. */
+function datesSomethingElse(sentence: string, m: RegExpMatchArray): boolean {
+  return /\b(?:your|my|our)\s+$/i.test(sentence.slice(0, m.index)) || /^(?:['’]s)?\s+(?:trades?|journal|reviews?|entry|entries|sessions?|log|stats|results)\b/i.test(sentence.slice(m.index! + m[0].length));
+}
+
+/** Words of its own lead to this date, none about an event: "before NFP on 4 December, finish your plan by 3 December". */
+function leadsElsewhere(lead: string): boolean {
+  if (EVENT_DATE_WORD.test(lead) || NAMES.some(([re]) => lead.search(re) >= 0)) return false;
+  return lead.replace(/\b(?:on|for|by|or|and|not|to|the|is|was|no|sorry|actually)\b/gi, '').search(/[a-z]{2}/i) >= 0;
+}
+
 /** Days an event may be dated: this week's if it has one, otherwise any listed. The Fed's first day counts, except for its decision. */
 function acceptedDays(name: EventName, monday: Date | undefined, decisionOnly: boolean): Date[] {
   const mine = EVENTS.filter((e) => e.name === name);
@@ -157,32 +171,39 @@ export function eventIssues(fields: string[], monday?: Date): { block: string[];
       const found = NAMES.flatMap(([re, name]) => [...sentence.matchAll(re)].map((m) => ({ name, at: m.index! })));
       if (!found.length) return;
       const about = [...new Set(found.map((f) => f.name))].join(' / ');
-      for (const m of sentence.matchAll(DATE)) {
-        const [whole, wdBefore, d1, d2, monthA, monthB, d3, d4, year, wdAfter] = m;
-        const monthWord = monthA ?? monthB;
-        if (isModalMay(sentence, m)) continue;
+      let end = 0;
+      const dates = [...sentence.matchAll(DATE)].filter((m) => !isModalMay(sentence, m)).map((m) => {
+        const [whole, , d1, d2, monthA, monthB, d3, d4, year] = m;
+        const at = m.index!;
+        const lead = sentence.slice(end, at);
+        end = at + whole.length;
         // With two events in a sentence, the date belongs to the nearest one.
-        const name = found.reduce((a, b) => (Math.abs(b.at - m.index!) < Math.abs(a.at - m.index!) ? b : a)).name;
-        const month = MONTHS.indexOf(monthWord.toLowerCase().slice(0, 3));
+        const { name } = found.reduce((x, y) => (Math.abs(y.at - at) < Math.abs(x.at - at) ? y : x));
+        const month = MONTHS.indexOf((monthA ?? monthB).toLowerCase().slice(0, 3));
         const days = [d1 ?? d3, d2 ?? d4].filter(Boolean).map(Number);
-        const decisionOnly = days.length === 1 && datesDecision(sentence, m.index!);
+        const decisionOnly = days.length === 1 && datesDecision(sentence, at);
         const matches = days.map((d) =>
-          acceptedDays(name, monday, decisionOnly).find((a) => a.getUTCDate() === d && a.getUTCMonth() === month && (!year || a.getUTCFullYear() === Number(year))),
+          acceptedDays(name, monday, decisionOnly).find((x) => x.getUTCDate() === d && x.getUTCMonth() === month && (!year || x.getUTCFullYear() === Number(year))),
         );
-        if (matches.some((x) => !x)) {
-          block.push(`gives "${whole.trim()}" as a date for the ${name}; check src/instagram/events.ts`);
+        return { m, lead, name, matches, right: matches.every(Boolean) };
+      });
+      for (const { m, lead, name, matches, right } of dates) {
+        const whole = m[0].trim();
+        if (!right) {
+          if (datesSomethingElse(sentence, m)) continue;
+          // The event has its right date here already, and this one has its own words.
+          if (dates.some((d) => d.right && d.name === name) && leadsElsewhere(lead)) continue;
+          block.push(`gives "${whole}" as a date for the ${name}; check src/instagram/events.ts`);
           continue;
         }
-        const weekday = (wdBefore ?? wdAfter)?.toLowerCase();
-        if (weekday && !matches.some((x) => DAYS[x!.getUTCDay()] === weekday)) block.push(`gives the wrong weekday: "${whole.trim()}" for the ${name}`);
+        const weekday = (m[1] ?? m[9])?.toLowerCase();
+        if (weekday && !matches.some((x) => DAYS[x!.getUTCDay()] === weekday)) block.push(`gives the wrong weekday: "${whole}" for the ${name}`);
       }
       const other = OTHER_DATE.exec(sentence);
       if (other) warn.push(`"${other[0].trim()}" next to the ${about} can't be checked; write the date like "4 December"`);
-      const both = /\b(?:cut\w*|lower)\b.*\b(?:hike\w*|raise)\b|\b(?:hike\w*|raise)\b.*\b(?:cut\w*|lower)\b/i.test(sentence);
-      const outlook = HEDGE.test(sentence) || both ? null : OUTLOOK.exec(sentence.replace(DISCOURAGED, ''));
-      const near = [sentence, sentences[i - 1] ?? '', sentences[i + 1] ?? ''].filter((x) => !HEDGE.test(x));
-      const move = near.map((x) => DIRECTION.exec(x.replace(DISCOURAGED, ''))).find(Boolean);
-      const view = outlook ?? move;
+      // A claim in the sentence before or after counts too.
+      const near = [sentence, sentences[i - 1] ?? '', sentences[i + 1] ?? ''].filter((x) => !HEDGE.test(x)).map((x) => x.replace(DISCOURAGED, ''));
+      const view = near.map((x) => (BOTH_WAYS.test(x) || /^\W*(?:a\s+)?rate\s+(?:cut|hike)\?/i.test(x) ? null : OUTLOOK.exec(x)) ?? DIRECTION.exec(x)).find(Boolean);
       if (view) block.push(`"${view[0]}" next to the ${about}: reads as a market view`);
       const forecast = FORECAST.exec(sentence);
       if (forecast) warn.push(`mentions "${forecast[0]}" next to the ${about}; risk process only`);

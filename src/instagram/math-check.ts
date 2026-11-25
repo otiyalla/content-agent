@@ -287,8 +287,21 @@ function comparable(left: Token[], res: Num, line: string): boolean {
   }
 }
 
+/** Whether one pair of brackets goes round the whole sum. */
+function enclosed(tokens: Token[]): boolean {
+  if (tokens[0]?.op !== '(' || tokens[tokens.length - 1].op !== ')') return false;
+  let depth = 0;
+  return tokens.every((t, i) => {
+    if (t.op === '(') depth++;
+    if (t.op === ')') depth--;
+    return depth > 0 || i === tokens.length - 1;
+  });
+}
+
 /** Whether the sum itself turns a fraction into a percentage: "3 ÷ 7 x 100". Dividing by 100 doesn't count. */
-function timesHundred(left: Token[]): boolean {
+function timesHundred(sum: Token[]): boolean {
+  let left = sum;
+  while (enclosed(left)) left = left.slice(1, -1);
   let depth = 0;
   return left.some((t, i) => {
     if (t.op === '(') depth++;
@@ -414,7 +427,7 @@ function candidates(left: Token[], res: Num, sign: string, aboutLosses: boolean)
   for (const v of values) {
     const prices = res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip' || n.pct) && pipScales(left).some((p) => p > 10);
     if (!prices) out.push(res.pct ? v * 100 : v);
-    if (res.pct && (timesHundred(left) || (addsOnly && !nums(left).some((n) => n.pct)))) out.push(v); // "3 ÷ 7 x 100 = 42.9%"
+    if (res.pct && !nums(left).some((n) => n.pct) && (timesHundred(left) || addsOnly)) out.push(v); // "3 ÷ 7 x 100 = 42.9%"
     if (!res.pct && !res.unit && addsOnly && nums(left).every((n) => n.pct)) out.push(v * 100); // "70% - 30% = 40 points"
     if (res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip')) {
       if (nums(left).every((n) => n.pct)) out.push(v * 100);

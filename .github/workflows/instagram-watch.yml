@@ -26,7 +26,9 @@ jobs:
       - run: npm ci
       - run: npx ts-node src/workflows/instagram-watch.ts
         env:
-          DRY_RUN: ${{ vars.IG_LIVE == 'true' && 'false' || 'true' }}
+          DRY_RUN: 'false' # it posts nothing, and must warn even if IG_LIVE was turned off by mistake
+          IG_LIVE: ${{ vars.IG_LIVE }}
+          OWNER_AWAY: ${{ vars.OWNER_AWAY }}
           GITHUB_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

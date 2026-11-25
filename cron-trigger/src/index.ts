@@ -26,14 +26,15 @@ export interface Env {
   EMAIL?: { send(message: { to: string; from: string; subject: string; text: string }): Promise<unknown> };
 }
 
-const CRONS: Record<string, 'publish' | 'comments' | 'plan'> = {
+export const CRONS: Record<string, 'publish' | 'comments' | 'plan'> = {
   '7 13,14,18 * * *': 'publish', // slots are 13:00 Mon–Thu, 14:00 Sat; 18:07 retries
   '37 13-16,19,22 * * *': 'comments', // comment digest
   '0 16 * * SUN': 'plan', // plan next week, refresh token, email preview
 };
 /** Hour (UTC) of the comments run that also does the daily check. */
-const WATCH_HOUR = 19;
+export const WATCH_HOUR = 19;
 const TRIES = 3;
+const TIMEOUT_MS = 15_000;
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,6 +54,7 @@ async function dispatch(env: Env, jobType: string, pauseMs: number): Promise<str
           'User-Agent': 'zenlot-cron-trigger',
         },
         body: JSON.stringify({ ref: 'main', inputs: { job_type: jobType } }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       if (res.status === 204) {
         console.log(`dispatched ${jobType}`);
@@ -71,7 +73,7 @@ async function dispatch(env: Env, jobType: string, pauseMs: number): Promise<str
 /** Reads a week's calendar from the public repository. */
 async function readWeek(env: Env, week: string): Promise<WatchedWeek> {
   try {
-    const res = await fetch(`https://raw.githubusercontent.com/${env.GITHUB_REPO}/main/content/instagram/calendar/${week}.json`, { headers: { 'User-Agent': 'zenlot-cron-trigger' } });
+    const res = await fetch(`https://raw.githubusercontent.com/${env.GITHUB_REPO}/main/content/instagram/calendar/${week}.json`, { headers: { 'User-Agent': 'zenlot-cron-trigger' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (res.status === 404) return null;
     if (!res.ok) return 'unknown';
     const posts = ((await res.json()) as { posts?: WatchedPost[] }).posts;
@@ -85,16 +87,12 @@ async function alert(env: Env, problems: string[]): Promise<void> {
   if (!problems.length) return;
   console.error(`ALERT: ${problems.join(' | ')}`);
   if (!env.EMAIL || !env.ALERT_TO || !env.ALERT_FROM) return console.error('No alert email: EMAIL, ALERT_TO and ALERT_FROM are not all set');
-  try {
-    await env.EMAIL.send({
-      to: env.ALERT_TO,
-      from: env.ALERT_FROM,
-      subject: `[Zenlot IG] ${problems.length === 1 ? 'Something needs a look' : `${problems.length} things need a look`}`,
-      text: `${problems.map((p) => `- ${p}`).join('\n')}\n\nRuns: https://github.com/${env.GITHUB_REPO}/actions/workflows/${env.WORKFLOW_FILE}\n`,
-    });
-  } catch (err) {
-    console.error(`alert email failed: ${message(err)}`);
-  }
+  await env.EMAIL.send({
+    to: env.ALERT_TO,
+    from: env.ALERT_FROM,
+    subject: `[Zenlot IG] ${problems.length === 1 ? 'Something needs a look' : `${problems.length} things need a look`}`,
+    text: `${problems.map((p) => `- ${p}`).join('\n')}\n\nRuns: https://github.com/${env.GITHUB_REPO}/actions/workflows/${env.WORKFLOW_FILE}\n`,
+  });
 }
 
 export async function run(event: { cron: string; scheduledTime: number }, env: Env, pauseMs = 5000): Promise<void> {
@@ -118,7 +116,11 @@ export async function run(event: { cron: string; scheduledTime: number }, env: E
     for (const week of weeksToWatch(now)) weeks[week] = await readWeek(env, week);
     problems.push(...calendarProblems(weeks, now));
   }
-  await alert(env, problems);
+  try {
+    await alert(env, problems);
+  } catch (err) {
+    failed = new Error(`alert email failed: ${message(err)}${failed ? ` (after: ${failed.message})` : ''}`);
+  }
   if (failed) throw failed; // also shows as an error in Cloudflare
 }
 

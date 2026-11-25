@@ -28,7 +28,8 @@ calendar reminder to renew it before its expiry date.
 
 It emails when a publish or plan job can't be started (after 3 tries), and at 19:37 UTC when a post is 5 hours overdue,
 a plan is missing, comments couldn't be started, or `GITHUB_TOKEN` expires in 14, 7, 3 or fewer days. Until email is set
-up, these are only in the Worker's logs.
+up, these are only in the Worker's logs. It can't see `IG_LIVE`, so while publishing is paused each due post is reported for
+about two days, then dropped.
 
 To set up email:
 
@@ -45,7 +46,7 @@ late. If GitHub's schedule and the Worker both stop, only someone looking would 
 
 ## Changing times
 
-Edit the cron in three places together: `wrangler.toml` `[triggers]`, `CRONS` in `src/index.ts`, and the
+Keep 19 in the comments hours, or change `WATCH_HOUR` in `src/index.ts` too: the daily check runs then. Edit the cron in three places together: `wrangler.toml` `[triggers]`, `CRONS` in `src/index.ts`, and the
 workflow's `schedule:`. Then `npx wrangler deploy` from this folder.
 
 ## Checking it

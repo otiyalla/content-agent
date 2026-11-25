@@ -38,13 +38,16 @@ export async function watchProblems(now: Date): Promise<string[]> {
     }
   }
   const worker = await workerProblem(now);
-  return [...calendarProblems(weeks, now), ...(worker ? [worker] : [])];
+  const found = [...calendarProblems(weeks, now), ...(worker ? [worker] : [])];
+  const paused = found.length > 0 && !!process.env.GITHUB_ACTIONS && process.env.IG_LIVE !== 'true';
+  return paused ? ['IG_LIVE is not "true", so nothing publishes. If that was not on purpose, set it back.', ...found] : found;
 }
 
 async function main() {
   const problems = await watchProblems(new Date());
   if (!problems.length) return console.log('Nothing overdue, plans in place, Worker running.');
   for (const p of problems) console.error(`⚠️  ${p}`);
+  if (env.OWNER_AWAY) return console.log('OWNER_AWAY is on: not emailing.');
   const subject = `[Zenlot IG] ${problems.length === 1 ? 'Something needs a look' : `${problems.length} things need a look`}`;
   const sent = await emailService.sendHtml(subject, `<ul>${problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`);
   // A failed run is the fallback: GitHub shows it, and emails about it if your notifications allow.

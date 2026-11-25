@@ -9,6 +9,7 @@ export interface WatchedPost {
   status: string;
   lastError?: string;
   missedNotice?: string;
+  previewedAt?: string;
 }
 
 /** A week's posts, null if it has no calendar, or 'unknown' if it couldn't be read. */
@@ -18,6 +19,8 @@ const HOUR = 3600_000;
 const DAY = 24 * HOUR;
 /** Slots are at 13:00 and 14:00, and the last retry is at 18:07 (a changed post also waits 3 hours). */
 export const OVERDUE_MS = 5 * HOUR;
+/** Then it stops: it's long past the publisher's 30-hour limit, so publishing is paused or already being dealt with. */
+const OVERDUE_UNTIL_MS = 54 * HOUR;
 /** The plan runs on Sunday at 16:00 UTC. */
 const PLAN_READY_HOUR = 19;
 /** Days before the Worker's GitHub token expires on which to warn. */
@@ -42,6 +45,7 @@ export function weeksToWatch(now: Date): string[] {
 export function calendarProblems(weeks: Record<string, WatchedWeek>, now: Date): string[] {
   const out: string[] = [];
   const [last, ...current] = weeksToWatch(now);
+  if ([last, ...current].every((w) => weeks[w] === null)) return ['No calendar could be found, not even last week\'s. Has the repository been renamed or made private?'];
   for (const week of [last, ...current]) {
     const posts = weeks[week];
     if (posts === 'unknown') {
@@ -57,8 +61,10 @@ export function calendarProblems(weeks: Record<string, WatchedWeek>, now: Date):
       if (p.status !== 'scheduled' && p.status !== 'failed') continue;
       const due = Date.parse(p.scheduledAt);
       if (Number.isNaN(due)) out.push(`${p.id} has a date that can't be read (${JSON.stringify(p.scheduledAt)}).`);
-      else if (now.getTime() - due >= OVERDUE_MS) {
-        out.push(`${p.id} was due ${new Date(due).toISOString().slice(0, 16).replace('T', ' ')} UTC and is not out${p.lastError ? `: ${p.lastError}` : ''}.`);
+      else if (now.getTime() - due >= OVERDUE_MS && now.getTime() - due < OVERDUE_UNTIL_MS) {
+        // Re-previewed after it came due: someone edited it, and it's waiting out the review time.
+        const held = p.previewedAt && Date.parse(p.previewedAt) >= due ? ` It changed and was previewed again at ${p.previewedAt.slice(11, 16)} UTC, so it waits 3 hours and goes out on the next run after that.` : '';
+        out.push(`${p.id} was due ${new Date(due).toISOString().slice(0, 16).replace('T', ' ')} UTC and is not out${p.lastError ? `: ${p.lastError}` : ''}.${held}`);
       }
     }
   }

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { run, type Env } from '../cron-trigger/src/index';
+import fs from 'fs';
+import { CRONS, WATCH_HOUR, run, type Env } from '../cron-trigger/src/index';
 import { isoWeekId } from '../src/instagram/calendar';
 import { calendarProblems, tokenProblem, weekId, weeksToWatch, type WatchedPost } from '../src/instagram/watch';
-import { workerProblem } from '../src/workflows/instagram-watch';
+import { watchProblems, workerProblem } from '../src/workflows/instagram-watch';
 
 const post = (o: Partial<WatchedPost>): WatchedPost => ({ id: 'p', scheduledAt: '2026-11-25T13:00:00.000Z', status: 'scheduled', ...o });
 const at = (t: string) => new Date(`2026-11-${t}:00Z`);
@@ -19,6 +20,47 @@ test('a post is overdue only once its retries are over', () => {
   for (const status of ['published', 'skipped', 'missed']) assert.deepEqual(problems([post({ status })], at('25T19:37')), [], status);
   assert.match(problems([post({ status: 'missed', missedNotice: 'x' })], at('25T19:37'))[0], /notice email has not been sent/);
   assert.match(problems([post({ scheduledAt: 'soon' })], at('25T19:37'))[0], /can't be read/);
+});
+test('a long-paused post stops being reported, and a held one says why', () => {
+  assert.equal(problems([post({})], at('27T18:59')).length, 1);
+  assert.deepEqual(problems([post({})], at('27T19:37')), []);
+  assert.match(problems([post({ previewedAt: '2026-11-25T18:07:00.000Z' })], at('25T19:37'))[0], /previewed again at 18:07 UTC, so it waits/);
+  assert.doesNotMatch(problems([post({ previewedAt: '2026-11-22T16:00:00.000Z' })], at('25T19:37'))[0], /previewed again/);
+});
+test('no calendar at all is not called a missing plan', () => {
+  assert.match(calendarProblems({ '2026-W47': null, '2026-W48': null }, at('25T19:37')).join(), /^No calendar could be found[^,]*, not even/);
+});
+test('the daily check stays on the schedule, and the crons match wrangler.toml', () => {
+  const toml = fs.readFileSync('cron-trigger/wrangler.toml', 'utf8');
+  for (const cron of Object.keys(CRONS)) assert.ok(toml.includes(`"${cron}"`), cron);
+  const hours = Object.entries(CRONS).find(([, job]) => job === 'comments')![0].split(' ')[1].split(',');
+  assert.ok(hours.some((h) => { const [a, b = a] = h.split('-').map(Number); return a <= WATCH_HOUR && WATCH_HOUR <= b; }));
+});
+test('a failed alert email is an error, and requests time out', async () => {
+  const broken = { EMAIL: { send: async () => { throw new Error('not verified'); } } };
+  const overdue = (url: string) => (url.includes('dispatches') ? new Response(null, { status: 204 }) : Response.json({ posts: [post({})] }));
+  assert.match((await worker(COMMENTS, '25T19:37', overdue, broken)).error, /alert email failed: not verified/);
+  assert.match((await worker(PUBLISH, '25T13:07', () => new Response('', { status: 401 }), broken)).error, /not verified \(after: dispatch publish failed: 401/);
+  const real = globalThis.fetch;
+  const signals: unknown[] = [];
+  globalThis.fetch = (async (url: unknown, init?: RequestInit) => { signals.push(init?.signal); return ok(String(url)); }) as typeof fetch;
+  try {
+    await run({ cron: COMMENTS, scheduledTime: at('25T19:37').getTime() }, { GITHUB_TOKEN: 't', GITHUB_REPO: 'o/r', WORKFLOW_FILE: 'w.yml' }, 0);
+  } finally {
+    globalThis.fetch = real;
+  }
+  assert.ok(signals.length === 3 && signals.every((s) => s instanceof AbortSignal));
+});
+test('the watchdog says when IG_LIVE is off', async () => {
+  const keep = { ...process.env };
+  Object.assign(process.env, { GITHUB_ACTIONS: 'true', IG_LIVE: '', GITHUB_REPOSITORY: '', GITHUB_TOKEN: '' });
+  try {
+    assert.match((await watchProblems(new Date('2040-01-04T20:00:00Z')))[0], /IG_LIVE is not "true"/);
+    process.env.IG_LIVE = 'true';
+    assert.doesNotMatch((await watchProblems(new Date('2040-01-04T20:00:00Z')))[0], /IG_LIVE/);
+  } finally {
+    process.env = keep;
+  }
 });
 test('a missing plan is noticed from Sunday evening', () => {
   assert.deepEqual(weeksToWatch(at('29T15:00')), ['2026-W47', '2026-W48']);

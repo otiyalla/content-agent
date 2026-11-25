@@ -12,7 +12,7 @@ import { CHANGE_HOLD_MS, MAX_LATENESS_MS, canStillPublish, markPreviewed, previe
 import { sendChangePreview, sendMissedNotice } from '../instagram/preview';
 import { AWAY_REASON, skipWhileAway } from '../instagram/away';
 import { renderReshareStory } from '../instagram/reshare-story';
-import type { CalendarPost } from '../instagram/types';
+import type { CalendarPost, WeekCalendar } from '../instagram/types';
 
 // ---------------------------------------------------------------------------
 // Instagram publisher — runs a few times a day. Publishes every post whose
@@ -103,28 +103,30 @@ async function postReshareStory(week: string, post: CalendarPost, cover: Buffer)
   }
 }
 
-function recordFailure(post: CalendarPost, err: unknown): void {
+/** Returns true if that was its last try and it's now missed. */
+function recordFailure(post: CalendarPost, err: unknown): boolean {
   if (post.published) {
     // Live posts are never downgraded: that would publish them again.
     console.error(`  ❌ ${post.id}: ${err instanceof Error ? err.message : err} (already published)`);
-    return;
+    return false;
   }
   post.attempts = (post.attempts ?? 0) + 1;
   post.lastError = err instanceof Error ? err.message : String(err);
   post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
   if (post.status === 'missed') post.missedNotice = `publishing failed ${post.attempts} times, last with: ${post.lastError}`;
   console.error(`  ❌ ${post.id}: ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
+  return post.status === 'missed';
 }
 
-/** Emails that a post was missed. The reason stays on the post until the email goes out, so later runs retry. Returns true if the post changed. */
-async function notifyMissed(week: string, post: CalendarPost, reason = post.missedNotice ?? ''): Promise<boolean> {
-  if (!(await sendMissedNotice(week, post, reason))) {
+/** Emails that a post was missed. The reason stays on the post until the email goes out, so later runs retry. */
+async function notifyMissed(cal: WeekCalendar, post: CalendarPost, reason = post.missedNotice ?? ''): Promise<void> {
+  if (!(await sendMissedNotice(cal.week, post, reason))) {
     console.error(`  ❌ notice email for ${post.id} was not sent; retried next run`);
-    return false;
+    return;
   }
-  if (env.DRY_RUN) return false;
+  if (env.DRY_RUN) return;
   delete post.missedNotice;
-  return true;
+  saveCalendar(cal); // the email is out: don't send it again if this run crashes later
 }
 
 async function main() {
@@ -151,7 +153,7 @@ async function main() {
     let changed = false;
 
     for (const post of cal.posts) {
-      if (post.status === 'missed' && post.missedNotice && (await notifyMissed(week, post))) changed = true;
+      if (post.status === 'missed' && post.missedNotice) await notifyMissed(cal, post);
       if (post.status !== 'scheduled' && post.status !== 'failed') continue;
       if (skipWhileAway(post, now, env.OWNER_AWAY)) {
         console.log(`🌙 ${post.id}: ${AWAY_REASON}`);
@@ -159,13 +161,20 @@ async function main() {
         continue;
       }
       const problem = scheduleProblem(post);
+      // Someone put a missed post back on the schedule: it starts again with a clean record.
+      if (post.status === 'scheduled' && (post.attempts || post.missedNotice || (post.lastError && post.lastError !== problem))) {
+        delete post.attempts;
+        delete post.missedNotice;
+        delete post.lastError;
+        changed = true;
+      }
       if (problem) {
         failures++;
         console.error(`  ❌ ${post.id}: ${problem}. Not publishing it until that's fixed.`);
         // Emailed once per problem: the post stays as it is until someone fixes the date.
         if (post.lastError !== problem && (await sendMissedNotice(week, post, problem)) && !env.DRY_RUN) {
           post.lastError = problem;
-          changed = true;
+          saveCalendar(cal);
         }
         continue;
       }
@@ -177,7 +186,7 @@ async function main() {
         post.status = 'missed';
         post.missedNotice = `no run could publish it within ${MAX_LATENESS_MS / 3600_000} hours of its slot${post.lastError ? ` (last error: ${post.lastError})` : ''}`;
         changed = true;
-        await notifyMissed(week, post);
+        await notifyMissed(cal, post);
         continue;
       }
       if (published >= MAX_PUBLISHES_PER_RUN) {
@@ -194,8 +203,7 @@ async function main() {
         // One broken post must not stop the others.
         failures++;
         changed = true;
-        recordFailure(post, err);
-        if (post.missedNotice) await notifyMissed(week, post);
+        if (recordFailure(post, err)) await notifyMissed(cal, post);
         continue;
       }
       const mismatch = previewMismatch(post, fingerprint);
@@ -211,7 +219,7 @@ async function main() {
             post.missedNotice = why;
             changed = true;
           }
-          await notifyMissed(week, post, why);
+          await notifyMissed(cal, post, why);
           continue;
         }
         console.log(`✋ ${post.id}: ${mismatch} — emailing a new preview; it publishes after ${after.toISOString()}`);
@@ -245,8 +253,7 @@ async function main() {
           continue;
         }
         changed = true;
-        recordFailure(post, err);
-        if (post.missedNotice) await notifyMissed(week, post);
+        if (recordFailure(post, err)) await notifyMissed(cal, post);
         continue;
       }
       if (!env.DRY_RUN) {

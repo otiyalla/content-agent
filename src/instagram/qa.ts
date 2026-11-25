@@ -107,10 +107,11 @@ const REPLACEMENTS: Record<string, string> = {
 /** Swaps characters the font can't draw for plain-text versions. Returns the new text and what changed. */
 export function plainText(text: string, supported: Set<number>): { text: string; changes: string[] } {
   const changes: string[] = [];
-  // "~$10 a pip" reads fine as "about $10 a pip". Between two figures it stands for "=", so that is left to be blocked.
-  let out = text.replace(/(^|\(|[a-z]{2,}[,:]?\s)\s*([~≈≃∼])\s?(?=[$€£]?\d)/g, (_, before: string, sign: string) => {
-    changes.push(`"${sign}" -> "about"`);
-    return `${before}about `;
+  // "~$10 a pip" reads fine as "about $10 a pip". Between two figures ("25 pips ~ $250") it stands for "=", so that is left to be blocked.
+  let out = text.replace(/(^|\(|(?<!\d[\s-]?)\b[A-Za-z]{2,}[,:]?\s)\s*([~≈≃∼])\s?(?=[$€£]?\d)/g, (_, before: string, sign: string) => {
+    const word = /^(?:about|around|roughly|nearly|almost|approximately)\s$/i.test(before) ? '' : 'about ';
+    changes.push(`"${sign}" -> "${word.trim()}"`);
+    return before + word;
   });
   out = [...out]
     .map((ch) => {
@@ -228,14 +229,14 @@ export async function qaPost(
       const { text, changes } = plainText(field.text, field.supported);
       if (changes.length) fixes.push(`${where} ${field.name}: ${changes.join(', ')}`);
       if (opts.fix) field.set(text);
+      const notation = /\S*[\^~≈≃∼⁰¹²³⁴⁵⁶⁷⁸⁹]\S*/.exec(text);
+      if (notation) {
+        blocking.push(`${where} ${field.name}: "${notation[0]}" is code notation; write the maths in words ("0.6 x 0.6 x 0.6 x 0.6 x 0.6 = 7.8%", "about")`);
+      }
       const missing = missingGlyphs(text, field.supported);
       if (missing.length) {
         blocking.push(`${where} ${field.name}: font can't draw ${missing.map((m) => `"${m}" (U+${m.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')})`).join(', ')}`);
       }
-    }
-    const notation = slideText(slide).match(/\S*(?:\^|[~≈≃∼]|[⁰¹²³⁴⁵⁶⁷⁸⁹]+)\S*/);
-    if (notation && /[\^~≈≃∼⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(plainText(slideText(slide), body).text)) {
-      blocking.push(`${where}: "${notation[0]}" is code notation; write the maths in words ("five losses in a row at 60%: 0.6 x 0.6 x 0.6 x 0.6 x 0.6 = 7.8%", "about")`);
     }
     const lint = lintCopy([slide.kicker, slide.title, slide.body, slide.stat, ...slide.items].join('\n'));
     for (const issue of lint) blocking.push(`${where}: ${issue}`);

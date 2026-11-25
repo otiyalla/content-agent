@@ -297,6 +297,9 @@ Produce the week plan.`;
 const CROSS_DAY_REF =
   /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)['’]s\s+(?:post|maths?|lesson|carousel|checklist|slide|numbers|example)|\byesterday['’]?s?\s+post|\bearlier this week\b|\b(?:last|previous|our last)\s+post\b/i;
 
+// The ask a closing title opens with. "Follow your plan" is advice, not an ask.
+const CTA_TITLE = /^\s*(?:(?:save|bookmark|share|send)\s+(?:this|it)\b|follow\s+(?:for|us|@)|comment\b)/i;
+
 export interface PlanCheck {
   /** One post per slot. `held` says why a post must never be published as it is; only that post is held, not the week. */
   posts: Array<{ post: PlannedPost; held: string[] }>;
@@ -342,7 +345,11 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[], weekStart?: Date)
     if (post.slides.length > 10) block(`has ${post.slides.length} slides`);
     else if (slot.format === 'single' && post.slides.length !== 1) warn(`is single but has ${post.slides.length} slides`);
     else if (slot.format === 'carousel' && post.slides.length < 3) warn(`carousel has ${post.slides.length} slides`);
-    if (post.slides.at(-1)?.layout === 'screen') warn('ends on an app screen, so its ask is not on the image; end with a cta slide');
+    const closing = post.slides.at(-1);
+    const titleAsk = closing?.layout === 'cta' ? CTA_TITLE.exec(closing.title.replace(/\*\*/g, ''))?.[0].toLowerCase() : undefined;
+    const asked = titleAsk && (/^(?:share|send)/.test(titleAsk) ? 'share' : /^follow/.test(titleAsk) ? 'follow' : /^comment/.test(titleAsk) ? 'comment' : 'save');
+    if (asked && asked !== post.ctaType) warn(`closing title asks to ${asked} but its ctaType is "${post.ctaType}", which is what the button shows`);
+    if (closing?.layout === 'screen') warn('ends on an app screen, so its ask is not on the image; end with a cta slide');
     for (const slide of post.slides) {
       if (slide.layout === 'screen' && !slide.screen) block('has a screen slide without a screen id');
       if (slide.layout !== 'screen') slide.screen = '';

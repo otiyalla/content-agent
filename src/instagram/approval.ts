@@ -67,6 +67,6 @@ export function previewMismatch(post: CalendarPost, renderFingerprint: string): 
   if (!post.previewHash) return 'it has never been previewed';
   if (post.previewHash !== contentHash(post)) return 'its text changed since the last preview';
   if (post.previewRenderHash !== renderFingerprint)
-    return post.previewRenderHash ? 'the slides or their alt text differ from the last preview (template, font, screenshot or rendering change)' : 'the last preview was sent before slide images were tracked';
+    return post.previewRenderHash ? 'the slides or their alt text differ from the last preview (call to action, series, template, font, screenshot or rendering change)' : 'the last preview was sent before slide images were tracked';
   return null;
 }

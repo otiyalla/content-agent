@@ -57,15 +57,15 @@ function rich(text: string, base: string = COLORS.text, accent: string = COLORS.
     const raw = hl ? part.slice(2, -2) : part;
     if (/^\s/.test(raw) && tokens.length) tokens[tokens.length - 1].space = true;
     // A loss is never shown in the accent colour.
-    const color = !hl ? base : isNegative(raw) ? COLORS.loss : accent;
+    const color = (w: string) => (!hl ? base : isNegative(raw) || isNegative(w) ? COLORS.loss : accent);
     const words = raw.split(/\s+/).filter(Boolean);
-    words.forEach((w, i) => tokens.push({ text: w, color, space: i < words.length - 1 || /\s$/.test(raw) }));
+    words.forEach((w, i) => tokens.push({ text: w, color: color(w), space: i < words.length - 1 || /\s$/.test(raw) }));
   }
   return tokens.map((t) => h('span', { color: t.color, marginRight: t.space ? '0.22em' : 0 }, t.text));
 }
 
-/** "-0.1R", "−$50", or a result that comes out negative ("= -0.1R"). */
-const isNegative = (text: string) => /(?:^|=)\s*[-−–]\s?[$€£]?\d/.test(text.trim());
+/** "-0.1R", "−$50", or a result that comes out negative ("= -0.1R"). Not a range that reaches a gain, or a dashed list. */
+const isNegative = (text: string) => /(?:^|=)\s*[-−–][$€£]?\d/.test(text.trim()) && !/(?:\+|\bto\s+\+?)[$€£]?\d/.test(text);
 
 /** Rough auto-fit: shrink type as the text gets longer. */
 function fit(text: string, sizes: Array<[number, number]>): number {
@@ -121,7 +121,7 @@ export function askText({ ctaType, series }: Ask): string {
 /** The ask drawn on a slide: only the closing one, and not where the slide already says it. */
 export function slideAsk(slide: Slide, index: number, total: number, ask: Ask): string {
   if (index !== total - 1 || slide.layout === 'screen') return '';
-  if (slide.layout === 'question' && ask.ctaType === 'comment') return '';
+  if (slide.layout === 'question' && ask.ctaType === 'comment' && (!slide.body || /\bcomment/i.test(slide.body))) return '';
   return askText(ask);
 }
 
@@ -155,7 +155,7 @@ function header({ index, total, kicker }: FrameOpts): El {
           `${index + 1}/${total}`,
         )
       : kicker
-        ? kickerPill(kicker)
+        ? kickerPill(kicker, COLORS.teal, true)
         : h('div', {}, ''),
   ]);
 }
@@ -300,12 +300,12 @@ function cover(s: Slide): El {
   ]);
 }
 
-function point(s: Slide): El {
+function point(s: Slide, { big }: LayoutOpts): El {
   return div({ flexDirection: 'column', gap: 40 }, [
     s.kicker
       ? /^[\d\s/.#-]+$/.test(s.kicker)
         ? h('div', { fontFamily: 'Mono', fontSize: 36, color: COLORS.orange }, s.kicker)
-        : h('div', { fontSize: 28, fontWeight: 800, letterSpacing: 3, textTransform: 'uppercase', color: COLORS.orange }, s.kicker)
+        : h('div', { fontSize: big ? 46 : 28, fontWeight: 800, letterSpacing: big ? 2 : 3, textTransform: 'uppercase', color: COLORS.orange }, s.kicker)
       : '',
     title(s.title),
     body(s.body),
@@ -432,7 +432,7 @@ export const PHONE_KEY = 'phone';
 export function phoneWidthFor(slide: Slide, visible: number): number {
   const widths = (slide.screen ? SCREENS[slide.screen].rowEnds : [])
     .map((end) => Math.round(((visible - BEZEL - 2) * 738) / end + BEZEL * 2))
-    .filter((w) => w >= 500 && w <= 760);
+    .filter((w) => w >= 470 && w <= 760);
   return widths.sort((a, b) => Math.abs(a - PHONE_W) - Math.abs(b - PHONE_W))[0] ?? PHONE_W;
 }
 

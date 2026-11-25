@@ -19,7 +19,7 @@ const MEASURE_HEIGHT = 3200;
 
 // A screen slide's text sits above the phone. Keep at least this much of the
 // phone visible, or the screenshot stops proving anything.
-const MIN_PHONE_VISIBLE = 560;
+export const MIN_PHONE_VISIBLE = 560;
 const PHONE_GAP = 36;
 
 interface Box {

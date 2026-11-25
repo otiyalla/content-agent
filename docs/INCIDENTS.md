@@ -16,6 +16,12 @@ One page for when something goes wrong. Check it once a year, and the links with
 also goes to the `SAFETY_BACKUP_EMAIL` secret. Set that secret first. Nothing can tell that an email went unread, so
 the switch is yours to flip.
 
+## Posts that don't go out
+
+You get an email when a post is missed (too late, failed 3 times, bad date, or changed too late to preview), and a daily
+warning while one is overdue, a plan is missing, or the Worker stops. Start the job by hand: GitHub → Actions → Zenlot
+Instagram → Run workflow. Setup and limits: `cron-trigger/README.md`.
+
 ## Severity
 
 | Level | Examples | First move |

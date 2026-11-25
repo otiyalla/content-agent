@@ -80,12 +80,12 @@ ${section}</div>`;
   if (!ok) throw new Error(`preview email for ${post.id} was not sent`);
 }
 
-/** Tells the team a post won't go out because its preview couldn't be sent in time. Returns false if the email failed. */
+/** Tells the team a post didn't go out, and why. Returns false if the email failed. */
 export async function sendMissedNotice(week: string, post: CalendarPost, reason: string): Promise<boolean> {
   return emailService.sendHtml(
     `[Zenlot IG] Not published: ${post.id}`,
-    `<p><code>${esc(post.id)}</code> (${esc(post.topic)}) was not published: ${esc(reason)}. It needed a preview and a 3-hour wait, and that ends too late for its slot.</p>
-<p>To use it later, change its <code>"scheduledAt"</code> and set its <code>"status"</code> to <code>"scheduled"</code> in <code>content/instagram/calendar/${week}.json</code>.</p>`,
+    `<p><code>${esc(post.id)}</code> (${esc(post.topic)}) was not published: ${esc(reason)}.</p>
+<p>To use it later, fix the cause, change its <code>"scheduledAt"</code> and set its <code>"status"</code> to <code>"scheduled"</code> in <code>content/instagram/calendar/${week}.json</code>.</p>`,
     [],
     path.join('out', 'instagram', week, `missed-${post.id}.html`),
   );

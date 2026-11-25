@@ -1,0 +1,38 @@
+name: Zenlot Instagram watch
+
+# Emails when a post is overdue, a plan is missing, or the Cloudflare Worker has stopped starting jobs.
+# On GitHub's own schedule so it works when the Worker is down. Reads only; posts and commits nothing.
+
+on:
+  schedule:
+    - cron: '47 19 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx ts-node src/workflows/instagram-watch.ts
+        env:
+          DRY_RUN: ${{ vars.IG_LIVE == 'true' && 'false' || 'true' }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}

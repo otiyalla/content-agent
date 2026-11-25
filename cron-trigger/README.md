@@ -24,6 +24,25 @@ It has no public URL (`workers_dev = false`), so nothing can trigger it over HTT
 Secrets → Add → Secret), or with `npx wrangler secret put GITHUB_TOKEN` from this folder. Tokens expire: set a
 calendar reminder to renew it before its expiry date.
 
+## Warnings
+
+It emails when a publish or plan job can't be started (after 3 tries), and at 19:37 UTC when a post is 5 hours overdue,
+a plan is missing, comments couldn't be started, or `GITHUB_TOKEN` expires in 14, 7, 3 or fewer days. Until email is set
+up, these are only in the Worker's logs.
+
+To set up email:
+
+1. Cloudflare dashboard → Compute → Email Service → Email Sending → Onboard Domain. Use a **subdomain**
+   (`alerts.zenlot.net`). **Don't enable Email Routing on `zenlot.net`**: it replaces the MX records, and Hostinger
+   handles that mail.
+2. Email Routing → Destination Addresses: add the address for the warnings and verify it. (Cloudflare says sending to verified
+   addresses is free; onboarding a sending domain may need the Workers Paid plan.)
+3. Uncomment the email lines in `wrangler.toml`, run `npx wrangler secret put ALERT_TO`, then `npx wrangler deploy`.
+
+Separately, `.github/workflows/instagram-watch.yml` does the same checks from GitHub with the existing SMTP settings, and
+warns if this Worker has started nothing for 26 hours (runs you start by hand count as activity). GitHub can run it hours
+late. If GitHub's schedule and the Worker both stop, only someone looking would notice.
+
 ## Changing times
 
 Edit the cron in three places together: `wrangler.toml` `[triggers]`, `CRONS` in `src/index.ts`, and the

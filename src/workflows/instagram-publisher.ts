@@ -112,6 +112,7 @@ function recordFailure(post: CalendarPost, err: unknown): void {
   post.attempts = (post.attempts ?? 0) + 1;
   post.lastError = err instanceof Error ? err.message : String(err);
   post.status = post.attempts >= MAX_ATTEMPTS ? 'missed' : 'failed';
+  if (post.status === 'missed') post.missedNotice = `publishing failed ${post.attempts} times, last with: ${post.lastError}`;
   console.error(`  ❌ ${post.id}: ${post.lastError} (attempt ${post.attempts}/${MAX_ATTEMPTS})`);
 }
 
@@ -161,6 +162,11 @@ async function main() {
       if (problem) {
         failures++;
         console.error(`  ❌ ${post.id}: ${problem}. Not publishing it until that's fixed.`);
+        // Emailed once per problem: the post stays as it is until someone fixes the date.
+        if (post.lastError !== problem && (await sendMissedNotice(week, post, problem)) && !env.DRY_RUN) {
+          post.lastError = problem;
+          changed = true;
+        }
         continue;
       }
       const due = Date.parse(post.scheduledAt);
@@ -169,7 +175,9 @@ async function main() {
       if (now.getTime() - due > MAX_LATENESS_MS) {
         console.log(`⏭  ${post.id} is ${Math.round((now.getTime() - due) / 3600_000)}h overdue — marking missed`);
         post.status = 'missed';
+        post.missedNotice = `no run could publish it within ${MAX_LATENESS_MS / 3600_000} hours of its slot${post.lastError ? ` (last error: ${post.lastError})` : ''}`;
         changed = true;
+        await notifyMissed(week, post);
         continue;
       }
       if (published >= MAX_PUBLISHES_PER_RUN) {
@@ -187,6 +195,7 @@ async function main() {
         failures++;
         changed = true;
         recordFailure(post, err);
+        if (post.missedNotice) await notifyMissed(week, post);
         continue;
       }
       const mismatch = previewMismatch(post, fingerprint);
@@ -194,14 +203,15 @@ async function main() {
         const after = new Date(now.getTime() + CHANGE_HOLD_MS);
         if (!canStillPublish(post, after)) {
           console.log(`⏭  ${post.id}: ${mismatch}, and no run is left after a hold — marking missed`);
+          const why = `${mismatch}. It needed a preview and a ${CHANGE_HOLD_MS / 3600_000}-hour wait, and that ends too late for its slot`;
           failures++;
           if (!env.DRY_RUN) {
             post.status = 'missed';
             post.lastError = `${mismatch}; too late to preview and hold`;
-            post.missedNotice = mismatch;
+            post.missedNotice = why;
             changed = true;
           }
-          await notifyMissed(week, post, mismatch);
+          await notifyMissed(week, post, why);
           continue;
         }
         console.log(`✋ ${post.id}: ${mismatch} — emailing a new preview; it publishes after ${after.toISOString()}`);
@@ -236,6 +246,7 @@ async function main() {
         }
         changed = true;
         recordFailure(post, err);
+        if (post.missedNotice) await notifyMissed(week, post);
         continue;
       }
       if (!env.DRY_RUN) {

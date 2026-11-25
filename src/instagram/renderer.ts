@@ -3,7 +3,7 @@ import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import jpeg from 'jpeg-js';
 import { CANVAS, loadFonts } from './brand';
-import { slideElement } from './templates';
+import { PHONE_KEY, phoneWidthFor, slideElement, type Ask } from './templates';
 import { normalizeSlide } from './qa';
 import { postAltTexts } from './alt-text';
 import type { CalendarPost, Slide } from './types';
@@ -22,13 +22,23 @@ const { version: JPEG_VERSION } = require('jpeg-js/package.json') as { version: 
 const RASTERISER = `resvg ${RESVG_VERSION}, jpeg-js ${JPEG_VERSION}, q${JPEG_QUALITY}, ${CANVAS.width}x${CANVAS.height}`;
 
 /** The slide as an SVG: the full layout, text and embedded screenshots, before rasterising. */
-export async function renderSlideSvg(slide: Slide, index: number, total: number): Promise<string> {
+export async function renderSlideSvg(slide: Slide, index: number, total: number, ask: Ask = {}): Promise<string> {
   // Swap symbols the font can't draw (e.g. "⁵", "≈") for plain text so they never render as boxes.
-  return satori(slideElement(normalizeSlide(slide), index, total) as unknown as Parameters<typeof satori>[0], {
-    width: CANVAS.width,
-    height: CANVAS.height,
-    fonts: loadFonts(),
-  });
+  const plain = normalizeSlide(slide);
+  let phoneTop: number | undefined;
+  const draw = (phoneWidth?: number) =>
+    satori(slideElement(plain, index, total, ask, phoneWidth) as unknown as Parameters<typeof satori>[0], {
+      width: CANVAS.width,
+      height: CANVAS.height,
+      fonts: loadFonts(),
+      onNodeDetected: (node) => {
+        if (node.key === PHONE_KEY) phoneTop = node.top;
+      },
+    });
+  const svg = await draw();
+  if (phoneTop === undefined) return svg;
+  // The phone starts wherever the text above it ends, so its size can only be chosen on a second pass.
+  return draw(phoneWidthFor(plain, CANVAS.height - phoneTop));
 }
 
 /**
@@ -39,16 +49,16 @@ export async function renderSlideSvg(slide: Slide, index: number, total: number)
  * screenshot, the image conversion or any slide's alt text changes.
  * Throws if a slide can't be rendered.
  */
-export async function renderHash(post: Pick<CalendarPost, 'slides' | 'altText'>): Promise<string> {
+export async function renderHash(post: Pick<CalendarPost, 'slides' | 'altText'> & Ask): Promise<string> {
   const { slides } = post;
   const h = crypto.createHash('sha256');
   h.update(JSON.stringify([RASTERISER, postAltTexts(post)]));
-  for (let i = 0; i < slides.length; i++) h.update(await renderSlideSvg(slides[i], i, slides.length));
+  for (let i = 0; i < slides.length; i++) h.update(await renderSlideSvg(slides[i], i, slides.length, post));
   return h.digest('hex').slice(0, 16);
 }
 
-export async function renderSlide(slide: Slide, index: number, total: number): Promise<Buffer> {
-  const svg = await renderSlideSvg(slide, index, total);
+export async function renderSlide(slide: Slide, index: number, total: number, ask: Ask = {}): Promise<Buffer> {
+  const svg = await renderSlideSvg(slide, index, total, ask);
 
   const rendered = new Resvg(svg, { fitTo: { mode: 'width', value: CANVAS.width } }).render();
   const encoded = jpeg.encode(
@@ -58,10 +68,11 @@ export async function renderSlide(slide: Slide, index: number, total: number): P
   return encoded.data;
 }
 
-export async function renderPost(slides: Slide[]): Promise<Buffer[]> {
+export async function renderPost(post: Pick<CalendarPost, 'slides'> & Ask): Promise<Buffer[]> {
+  const { slides } = post;
   const out: Buffer[] = [];
   for (let i = 0; i < slides.length; i++) {
-    out.push(await renderSlide(slides[i], i, slides.length));
+    out.push(await renderSlide(slides[i], i, slides.length, post));
   }
   return out;
 }

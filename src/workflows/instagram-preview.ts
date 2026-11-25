@@ -26,7 +26,7 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true });
 
   for (const post of posts) {
-    const images = await renderPost(post.slides);
+    const images = await renderPost(post);
     images.forEach((img, i) => fs.writeFileSync(path.join(outDir, `${post.id}-${i + 1}.jpg`), img));
     console.log(`Rendered ${post.id} (${images.length} slide${images.length > 1 ? 's' : ''})`);
   }

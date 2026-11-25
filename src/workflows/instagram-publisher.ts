@@ -40,7 +40,7 @@ async function publishPost(week: string, post: CalendarPost): Promise<void> {
   if (qa.fixes.length) console.log(`  QA swapped symbols: ${qa.fixes.join('; ')}`);
   if (qa.blocking.length) throw new Error(`Slide QA blocked publishing: ${qa.blocking.join('; ')}`);
 
-  const images = await renderPost(post.slides);
+  const images = await renderPost(post);
   const caption = `${post.caption.trim()}${hashtagsBlock(post)}`;
 
   if (env.DRY_RUN) {

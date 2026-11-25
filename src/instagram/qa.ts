@@ -6,6 +6,7 @@ import { eventIssues, postFields } from './events';
 import { layoutIssues } from './layout-check';
 import { mathIssues } from './math-check';
 import { SCREENS } from './screens';
+import type { Ask } from './templates';
 import type { Slide } from './types';
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,8 @@ import type { Slide } from './types';
 // 1. Glyph check. Satori draws a character the font doesn't have as an empty
 //    box (2026-W48-wed-3 shipped "0.6□ □ 7.8%"). We read the real character
 //    table (cmap) out of the WOFF files the renderer loads, swap common maths
-//    symbols for plain-text versions, and block anything still missing.
+//    symbols for plain-text versions, and block anything still missing, plus
+//    code notation ("0.6^5", "~"): maths on slides is written in words.
 // 2. Brand check: the same rules X and Reddit use (src/content/brand-guard.ts).
 // 3. Layout check: text that would overflow the slide (layout-check.ts).
 // 4. Maths check: sums, recovery and streak figures recomputed (math-check.ts).
@@ -96,24 +98,19 @@ function fontCoverage() {
   return coverage;
 }
 
-const SUPERSCRIPTS: Record<string, string> = {
-  '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁻': '-', '⁺': '+',
-};
-
 // Plain-text stand-ins for symbols the model likes to use in maths.
 const REPLACEMENTS: Record<string, string> = {
-  '≈': '~', '≃': '~', '∼': '~', '→': '->', '←': '<-', '⇒': '=>', '≤': '<=', '≥': '>=', '≠': '!=',
+  '→': '->', '←': '<-', '⇒': '=>', '≤': '<=', '≥': '>=', '≠': '!=',
   '…': '...', '✓': '', '✔': '', '✗': 'x', '✘': 'x', '•': '-', '·': '-', '√': 'sqrt ', '∞': 'infinity',
 };
 
 /** Swaps characters the font can't draw for plain-text versions. Returns the new text and what changed. */
 export function plainText(text: string, supported: Set<number>): { text: string; changes: string[] } {
   const changes: string[] = [];
-  let out = text.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, (run) => {
-    if ([...run].every((ch) => supported.has(ch.codePointAt(0)!))) return run;
-    const plain = `^${[...run].map((ch) => SUPERSCRIPTS[ch]).join('')}`;
-    changes.push(`"${run}" -> "${plain}"`);
-    return plain;
+  // "~$10 a pip" reads fine as "about $10 a pip". Between two figures it stands for "=", so that is left to be blocked.
+  let out = text.replace(/(^|\(|[a-z]{2,}[,:]?\s)\s*([~≈≃∼])\s?(?=[$€£]?\d)/g, (_, before: string, sign: string) => {
+    changes.push(`"${sign}" -> "about"`);
+    return `${before}about `;
   });
   out = [...out]
     .map((ch) => {
@@ -213,7 +210,7 @@ export interface PostQa {
  * otherwise fixes are only reported (the renderer applies them on the fly).
  */
 export async function qaPost(
-  post: { slides: Slide[]; caption: string; altText?: string; scheduledAt?: string },
+  post: { slides: Slide[]; caption: string; altText?: string; scheduledAt?: string } & Ask,
   opts: { fix?: boolean; weekStart?: Date } = {},
 ): Promise<PostQa> {
   const { body, mono } = fontCoverage();
@@ -236,12 +233,16 @@ export async function qaPost(
         blocking.push(`${where} ${field.name}: font can't draw ${missing.map((m) => `"${m}" (U+${m.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')})`).join(', ')}`);
       }
     }
+    const notation = slideText(slide).match(/\S*(?:\^|[~≈≃∼]|[⁰¹²³⁴⁵⁶⁷⁸⁹]+)\S*/);
+    if (notation && /[\^~≈≃∼⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(plainText(slideText(slide), body).text)) {
+      blocking.push(`${where}: "${notation[0]}" is code notation; write the maths in words ("five losses in a row at 60%: 0.6 x 0.6 x 0.6 x 0.6 x 0.6 = 7.8%", "about")`);
+    }
     const lint = lintCopy([slide.kicker, slide.title, slide.body, slide.stat, ...slide.items].join('\n'));
     for (const issue of lint) blocking.push(`${where}: ${issue}`);
   });
 
   for (let i = 0; i < post.slides.length; i++) {
-    blocking.push(...(await layoutIssues(normalizeSlide(post.slides[i]), i, post.slides.length)));
+    blocking.push(...(await layoutIssues(normalizeSlide(post.slides[i]), i, post.slides.length, post)));
   }
   blocking.push(...mathIssues(post));
   blocking.push(...screenFigureIssues(post.slides));

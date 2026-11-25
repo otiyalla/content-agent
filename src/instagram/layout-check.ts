@@ -1,7 +1,7 @@
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
 import { CANVAS, COLORS, loadFonts } from './brand';
-import { FRAME, slideParts, type El } from './templates';
+import { FRAME, slideParts, type Ask, type El } from './templates';
 import type { Slide } from './types';
 
 // ---------------------------------------------------------------------------
@@ -64,9 +64,9 @@ async function chromeHeight(key: string, el: El | null): Promise<number> {
 }
 
 /** Problems with how one slide's text fits. Expects a slide already passed through normalizeSlide. */
-export async function layoutIssues(slide: Slide, index: number, total: number): Promise<string[]> {
+export async function layoutIssues(slide: Slide, index: number, total: number, ask: Ask = {}): Promise<string[]> {
   const where = `slide ${index + 1}`;
-  const parts = slideParts(slide, index, total);
+  const parts = slideParts(slide, index, total, ask);
   const headerH = await chromeHeight(JSON.stringify(parts.header), parts.header);
   const footerH = await chromeHeight(JSON.stringify(parts.footer), parts.footer);
   const content = await measure(parts.content);

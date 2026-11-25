@@ -18,8 +18,9 @@ the switch is yours to flip.
 
 ## Posts that don't go out
 
-You get an email when a post is missed (too late, failed 3 times, bad date, or changed too late to preview), and a daily
-warning while one is overdue, a plan is missing, or the Worker stops. Start the job by hand: GitHub → Actions → Zenlot
+You get one email when a post is missed (too late, failed 3 times, bad date, or changed too late to preview). A daily
+warning lists posts 5 to 54 hours overdue, missing plans and a stopped Worker. Turning `IG_LIVE` off brings these warnings
+for posts that come due. With `OWNER_AWAY` on, GitHub reports only a stopped Worker (also to `SAFETY_BACKUP_EMAIL`). Start the job by hand: GitHub → Actions → Zenlot
 Instagram → Run workflow. Setup and limits: `cron-trigger/README.md`.
 
 ## Severity

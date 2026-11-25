@@ -15,11 +15,13 @@ permissions:
 jobs:
   watch:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to commits (v4): a moved tag can't change what runs here.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: main
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: npm
@@ -28,7 +30,8 @@ jobs:
         env:
           DRY_RUN: 'false' # it posts nothing, and must warn even if IG_LIVE was turned off by mistake
           IG_LIVE: ${{ vars.IG_LIVE }}
-          OWNER_AWAY: ${{ vars.OWNER_AWAY }}
+          OWNER_AWAY: ${{ vars.OWNER_AWAY }} # then only a stopped Worker is reported, to the backup address too
+          SAFETY_BACKUP_EMAIL: ${{ secrets.SAFETY_BACKUP_EMAIL }}
           GITHUB_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

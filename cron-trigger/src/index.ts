@@ -114,7 +114,11 @@ export async function run(event: { cron: string; scheduledTime: number }, env: E
   if (watching) {
     const weeks: Record<string, WatchedWeek> = {};
     for (const week of weeksToWatch(now)) weeks[week] = await readWeek(env, week);
-    problems.push(...calendarProblems(weeks, now));
+    try {
+      problems.push(...calendarProblems(weeks, now));
+    } catch (err) {
+      problems.push(`The calendar check itself failed: ${message(err)}`); // never lose the other warnings
+    }
   }
   try {
     await alert(env, problems);

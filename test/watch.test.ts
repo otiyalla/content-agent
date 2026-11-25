@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'fs';
 import { CRONS, WATCH_HOUR, run, type Env } from '../cron-trigger/src/index';
+import { nextPublishRun } from '../src/instagram/approval';
 import { isoWeekId } from '../src/instagram/calendar';
-import { calendarProblems, tokenProblem, weekId, weeksToWatch, type WatchedPost } from '../src/instagram/watch';
+import { calendarProblems, nextRun, tokenProblem, weekId, weeksToWatch, type WatchedPost } from '../src/instagram/watch';
 import { watchProblems, workerProblem } from '../src/workflows/instagram-watch';
 
 const post = (o: Partial<WatchedPost>): WatchedPost => ({ id: 'p', scheduledAt: '2026-11-25T13:00:00.000Z', status: 'scheduled', ...o });
@@ -26,6 +27,35 @@ test('a long-paused post stops being reported, and a held one says why', () => {
   assert.deepEqual(problems([post({})], at('27T19:37')), []);
   assert.match(problems([post({ previewedAt: '2026-11-25T18:07:00.000Z' })], at('25T19:37'))[0], /previewed again at 18:07 UTC, so it waits/);
   assert.doesNotMatch(problems([post({ previewedAt: '2026-11-22T16:00:00.000Z' })], at('25T19:37'))[0], /previewed again/);
+});
+test('the hold message stops once the hold is over or publishing has failed', () => {
+  const early = { previewedAt: '2026-11-25T13:07:00.000Z' }; // could go out at 18:07
+  assert.doesNotMatch(problems([post(early)], at('25T19:37'))[0], /previewed again/);
+  assert.doesNotMatch(problems([post({ status: 'failed', previewedAt: '2026-11-25T18:07:00.000Z' })], at('25T19:37'))[0], /previewed again/);
+  for (let t = Date.UTC(2026, 10, 25); t < Date.UTC(2026, 10, 27); t += 600_000) assert.equal(nextRun(t), nextPublishRun(new Date(t)).getTime());
+});
+test('a badly edited calendar is reported, and never hides other warnings', async () => {
+  const bad = [null, { id: 'n' }, post({ scheduledAt: 5 as unknown as string, previewedAt: 5 as unknown as string }), post({ previewedAt: {} as unknown as string })] as unknown as WatchedPost[];
+  const found = problems(bad, at('25T19:37'));
+  assert.equal(found.filter((f) => f.includes("isn't a post")).length, 2);
+  assert.ok(found.some((f) => f.includes("can't be read")) && found.some((f) => f.includes('is not out')));
+  const r = await worker(COMMENTS, '25T19:37', (u) => (u.includes('dispatches') ? new Response('', { status: 401 }) : Response.json({ posts: bad })));
+  assert.match(r.sent[0], /could not start a job[\s\S]*isn't a post/);
+});
+test('while the owner is away only a stopped Worker is reported', async () => {
+  const keep = { GITHUB_REPOSITORY: process.env.GITHUB_REPOSITORY, GITHUB_TOKEN: process.env.GITHUB_TOKEN };
+  const real = globalThis.fetch;
+  Object.assign(process.env, { GITHUB_REPOSITORY: 'o/r', GITHUB_TOKEN: 't' });
+  try {
+    globalThis.fetch = (async () => Response.json({ workflow_runs: [] })) as typeof fetch;
+    const found = await watchProblems(new Date('2040-01-04T20:00:00Z'), true);
+    assert.ok(found.length === 1 && found[0].includes('Worker has started no job'));
+    globalThis.fetch = (async () => Response.json({ workflow_runs: [{ created_at: '2040-01-04T19:37:00Z' }] })) as typeof fetch;
+    assert.deepEqual(await watchProblems(new Date('2040-01-04T20:00:00Z'), true), []);
+  } finally {
+    globalThis.fetch = real;
+    for (const [k, v] of Object.entries(keep)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
 });
 test('no calendar at all is not called a missing plan', () => {
   assert.match(calendarProblems({ '2026-W47': null, '2026-W48': null }, at('25T19:37')).join(), /^No calendar could be found[^,]*, not even/);

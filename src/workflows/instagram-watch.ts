@@ -28,7 +28,10 @@ export async function workerProblem(now: Date, repo = process.env.GITHUB_REPOSIT
   }
 }
 
-export async function watchProblems(now: Date): Promise<string[]> {
+export async function watchProblems(now: Date, away = false): Promise<string[]> {
+  const worker = await workerProblem(now);
+  // While the owner is away nothing is meant to publish, but the comment digest and its safety alerts still need the Worker.
+  if (away) return worker ? [worker] : [];
   const weeks: Record<string, WatchedWeek> = {};
   for (const week of weeksToWatch(now)) {
     try {
@@ -37,19 +40,18 @@ export async function watchProblems(now: Date): Promise<string[]> {
       weeks[week] = 'unknown';
     }
   }
-  const worker = await workerProblem(now);
   const found = [...calendarProblems(weeks, now), ...(worker ? [worker] : [])];
   const paused = found.length > 0 && !!process.env.GITHUB_ACTIONS && process.env.IG_LIVE !== 'true';
   return paused ? ['IG_LIVE is not "true", so nothing publishes. If that was not on purpose, set it back.', ...found] : found;
 }
 
 async function main() {
-  const problems = await watchProblems(new Date());
-  if (!problems.length) return console.log('Nothing overdue, plans in place, Worker running.');
+  const problems = await watchProblems(new Date(), env.OWNER_AWAY);
+  if (!problems.length) return console.log(env.OWNER_AWAY ? 'Owner away; Worker running.' : 'Nothing overdue, plans in place, Worker running.');
   for (const p of problems) console.error(`⚠️  ${p}`);
-  if (env.OWNER_AWAY) return console.log('OWNER_AWAY is on: not emailing.');
+  const backup = env.OWNER_AWAY && env.SAFETY_BACKUP_EMAIL ? [env.SAFETY_BACKUP_EMAIL] : [];
   const subject = `[Zenlot IG] ${problems.length === 1 ? 'Something needs a look' : `${problems.length} things need a look`}`;
-  const sent = await emailService.sendHtml(subject, `<ul>${problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`);
+  const sent = await emailService.sendHtml(subject, `<ul>${problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`, [], undefined, backup);
   // A failed run is the fallback: GitHub shows it, and emails about it if your notifications allow.
   if (!sent && !env.DRY_RUN) process.exitCode = 1;
 }

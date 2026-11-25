@@ -21,6 +21,9 @@ const DAY = 24 * HOUR;
 export const OVERDUE_MS = 5 * HOUR;
 /** Then it stops: it's long past the publisher's 30-hour limit, so publishing is paused or already being dealt with. */
 const OVERDUE_UNTIL_MS = 54 * HOUR;
+/** How long an edited post waits after its new preview (CHANGE_HOLD_MS), and how long a run may take. */
+const HOLD_MS = 3 * HOUR;
+const RUN_TIME_MS = HOUR;
 /** The plan runs on Sunday at 16:00 UTC. */
 const PLAN_READY_HOUR = 19;
 /** Days before the Worker's GitHub token expires on which to warn. */
@@ -41,11 +44,18 @@ export function weeksToWatch(now: Date): string[] {
   return [at(-7), at(0), ...(planned ? [at(1)] : [])];
 }
 
+/** The first publish run at or after a time, as in nextPublishRun (src/instagram/approval.ts). */
+export function nextRun(after: number): number {
+  for (let day = Math.floor(after / DAY) * DAY; ; day += DAY) {
+    for (const hour of [13, 14, 18]) if (day + hour * HOUR + 7 * 60_000 >= after) return day + hour * HOUR + 7 * 60_000;
+  }
+}
+
 /** Problems with the calendars. `weeks` holds an entry for each of weeksToWatch(now). */
 export function calendarProblems(weeks: Record<string, WatchedWeek>, now: Date): string[] {
   const out: string[] = [];
   const [last, ...current] = weeksToWatch(now);
-  if ([last, ...current].every((w) => weeks[w] === null)) return ['No calendar could be found, not even last week\'s. Has the repository been renamed or made private?'];
+  if ([last, ...current].every((w) => weeks[w] === null)) return [`No calendar could be found, not even last week's. Either there is no plan (run the Instagram workflow with job "plan"), or the repository was renamed or made private.`];
   for (const week of [last, ...current]) {
     const posts = weeks[week];
     if (posts === 'unknown') {
@@ -57,13 +67,19 @@ export function calendarProblems(weeks: Record<string, WatchedWeek>, now: Date):
       continue;
     }
     for (const p of posts) {
+      if (typeof p?.id !== 'string' || typeof p.status !== 'string') {
+        out.push(`The calendar for ${week} has an entry that isn't a post. Check the last edit to it.`);
+        continue;
+      }
       if (p.status === 'missed' && p.missedNotice) out.push(`${p.id} was missed (${p.missedNotice}), and its notice email has not been sent.`);
       if (p.status !== 'scheduled' && p.status !== 'failed') continue;
-      const due = Date.parse(p.scheduledAt);
+      const due = typeof p.scheduledAt === 'string' ? Date.parse(p.scheduledAt) : NaN;
       if (Number.isNaN(due)) out.push(`${p.id} has a date that can't be read (${JSON.stringify(p.scheduledAt)}).`);
       else if (now.getTime() - due >= OVERDUE_MS && now.getTime() - due < OVERDUE_UNTIL_MS) {
         // Re-previewed after it came due: someone edited it, and it's waiting out the review time.
-        const held = p.previewedAt && Date.parse(p.previewedAt) >= due ? ` It changed and was previewed again at ${p.previewedAt.slice(11, 16)} UTC, so it waits 3 hours and goes out on the next run after that.` : '';
+        const previewed = p.status === 'scheduled' && typeof p.previewedAt === 'string' ? Date.parse(p.previewedAt) : NaN;
+        const waiting = previewed >= due && now.getTime() < nextRun(previewed + HOLD_MS) + RUN_TIME_MS;
+        const held = waiting ? ` It changed and was previewed again at ${new Date(previewed).toISOString().slice(11, 16)} UTC, so it waits 3 hours and goes out on the next run after that.` : '';
         out.push(`${p.id} was due ${new Date(due).toISOString().slice(0, 16).replace('T', ' ')} UTC and is not out${p.lastError ? `: ${p.lastError}` : ''}.${held}`);
       }
     }

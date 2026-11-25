@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // Moments in the trading year the planner should plan around. Matched by the
 // planned week's dates (UTC), so they apply every year without editing.
-// Market events like NFP or central-bank meetings are a separate item; this
+// Market events like NFP or central-bank meetings are in events.ts; this
 // is about the trader's own calendar.
 // ---------------------------------------------------------------------------
 

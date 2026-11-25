@@ -10,6 +10,7 @@ import { WeekPlanSchema, type WeekPlan, type PlannedPost, type CalendarPost } fr
 import { minFollowPosts } from './account';
 import { ZENLOT_SERIES, type Slot } from './calendar';
 import { topicsForPrompt } from './taxonomy';
+import { eventIssues, eventNotes, eventsRunOut, lateForEvent, postFields } from './events';
 import { seasonalNotes } from './seasonal';
 
 // ---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ export interface PlanningContext {
   recentPosts: CalendarPost[]; // previous weeks, for de-duplication and learning
   notes?: string; // optional steer from a human, e.g. "focus on NFP week"
   followers?: number; // current follower count; below FOLLOWER_GOAL the week must ask for follows
-  weekStart?: Date; // Monday of the planned week, for seasonal moments
+  weekStart?: Date; // Monday of the planned week, for seasonal moments and market events
 }
 
 // Below this many posts measured at the same age, rankings are noise.
@@ -222,11 +223,12 @@ export function withFollowAsk(caption: string, series: string): string {
   return [...lines.slice(0, at), ask, '', ...lines.slice(at)].join('\n');
 }
 
-function buildPrompt(ctx: PlanningContext): string {
+export function buildPrompt(ctx: PlanningContext): string {
   const slotLines = ctx.slots
     .map((s, i) => `  slot ${i}: ${s.day.toUpperCase()} ${s.hourUtc}:00 UTC — ${s.format} — series "${s.series}" — pillar ${s.pillars.join(' or ')}. ${s.brief}`)
     .join('\n');
   const season = ctx.weekStart ? seasonalNotes(ctx.weekStart) : '';
+  const events = ctx.weekStart ? eventNotes(ctx.weekStart, ctx.slots) : '';
   // Posts that were held or missed never ran, so their angle is still free. A vetoed one was turned down: don't repeat it.
   const recentTitles =
     ctx.recentPosts
@@ -276,7 +278,7 @@ so you don't repeat a mistake; why he wanted to see the possible gain or loss be
 post tells ONE part of the story, so over the weeks the account tells the whole thing. Never invent scenes,
 numbers, dates or outcomes. Never claim the founder is profitable or successful as a trader.
 Give the week a coherent theme so the posts reinforce each other.
-${season ? `\n# Seasonal moment\n${season}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\nA "[brief:<id> slot:<day>]" tag means that one slot's post should answer the question that follows it, inside its series. It never makes a post about another company. Don't repeat the tag anywhere.\n` : ''}
+${season ? `\n# Seasonal moment\n${season}\n` : ''}${events ? `\n# Market events this week (risk notes only)\n${events}\n` : ''}${ctx.notes ? `\nSteer from the team: ${ctx.notes}\nA "[brief:<id> slot:<day>]" tag means that one slot's post should answer the question that follows it, inside its series. It never makes a post about another company. Don't repeat the tag anywhere.\n` : ''}
 # Performance so far
 ${performanceSummary(ctx.recentPosts)}
 
@@ -318,7 +320,7 @@ function mixWarnings(posts: PlannedPost[], minFollow: number): string[] {
  * Checks the rules the schema can't express, and repairs what it safely can. Brand, maths, advice and
  * anything that can't be drawn blocks that post; everything else is a warning.
  */
-export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<PlanCheck> {
+export async function checkPlan(plan: WeekPlan, slots: Slot[], weekStart?: Date): Promise<PlanCheck> {
   const warnings: string[] = [];
   const bySlot = new Map<number, { post: PlannedPost; held: string[] }>();
   for (const post of plan.posts) {
@@ -353,6 +355,10 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<PlanChec
     if (post.slides[0]) post.slides[0].kicker = series;
     const text = `${post.caption}\n${post.slides.map((sl) => [sl.title, sl.body, ...sl.items].join(' ')).join('\n')}`;
     const crossRef = CROSS_DAY_REF.exec(text);
+    // Wrong event dates and market views block in qaPost; these are the warnings.
+    const fields = postFields(post);
+    eventIssues(fields, weekStart).warn.forEach(warn);
+    if (weekStart) lateForEvent(fields, weekStart, slot).forEach(warn);
     if (crossRef) warn(`refers to another post ("${crossRef[0]}"); posts must stand alone`);
     if (!post.caption.includes('not financial advice')) {
       post.caption = `${post.caption.trim()}\n\nEducational content, not financial advice.`;
@@ -362,7 +368,7 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[]): Promise<PlanChec
     // Swap unsupported maths symbols in place; anything still unrenderable or off-brand goes back to the model.
     // Also checks text fit, recomputes the maths and matches worked examples to app screens.
     try {
-      for (const issue of (await qaPost(post, { fix: true })).blocking) block(issue);
+      for (const issue of (await qaPost(post, { fix: true, weekStart })).blocking) block(issue);
     } catch (err) {
       // A post that can't even be checked is held; it must not take the rest of the week with it.
       block(`could not be checked: ${err instanceof Error ? err.message : err}`);
@@ -462,14 +468,14 @@ export async function planWeek(ctx: PlanningContext, ask: (prompt: string) => Pr
   const prompt = buildPrompt(ctx);
   const minFollow = minFollowPosts(ctx.followers);
   let best = await ask(prompt);
-  let check = await checkPlan(best, ctx.slots);
+  let check = await checkPlan(best, ctx.slots, ctx.weekStart);
 
   const problems = allProblems(check, minFollow);
   if (problems.length) {
     console.warn(`[Strategist] plan issues: ${problems.join('; ')} — asking for a corrected plan`);
     try {
       const fixed = await ask(retryPrompt(prompt, best, problems));
-      const fixedCheck = await checkPlan(fixed, ctx.slots);
+      const fixedCheck = await checkPlan(fixed, ctx.slots, ctx.weekStart);
       if (score(fixedCheck, minFollow) <= score(check, minFollow)) [best, check] = [fixed, fixedCheck];
     } catch (err) {
       console.warn(`[Strategist] correction failed, using the first plan: ${err instanceof Error ? err.message : err}`);
@@ -477,5 +483,6 @@ export async function planWeek(ctx: PlanningContext, ask: (prompt: string) => Pr
     const left = allProblems(check, minFollow);
     if (left.length) console.warn(`[Strategist] still open: ${left.join('; ')}`);
   }
-  return usableWeek(best.theme, check, minFollow);
+  const week = usableWeek(best.theme, check, minFollow);
+  return { ...week, warnings: [...week.warnings, ...(ctx.weekStart ? eventsRunOut(ctx.weekStart) : [])] };
 }

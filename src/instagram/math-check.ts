@@ -70,13 +70,15 @@ type Num = Token & { kind: 'num' };
 const LABEL =
   /(?:(?:\/|per\b|an?\b|each\b)\s*)(?:pip|lot|trade|point|unit)s?\b|(?:of\s+)?(?:risk(?:ed)?|stop(?:[- ]loss)?|account|balance|equity|target|reward|profit|gain|wins?|winners?|loss(?:es)?|losers?|losing|winning|avg|average|trades?|units?|standard|mini|micro|each)\b/iy;
 const NUMBER =
-  /(USD|EUR|GBP|CAD|AUD|NZD|CHF|[$€£])?\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)(?:\s*(%)|(?:\s*|-)(R|pips?|points?|lots?|(?:standard|mini|micro)\s+lots?|USD|EUR|GBP|CAD|AUD|NZD|CHF|dollars?)(?![a-z]))?(k(?![a-z]))?/iy;
+  /(USD|EUR|GBP|CAD|AUD|NZD|CHF|[$€£])?\s*(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|\.\d+)(?:\s*(%)|(?:\s*|-)(R|pips?|points?|lots?|(?:standard|mini|micro)\s+lots?|USD|EUR|GBP|CAD|AUD|NZD|CHF|dollars?)(?![a-z]))?(?:(k|mn?|bn)(?![a-z])|\s*(thousand|million|billion)\b)?/iy;
 const WORD_OPS: Array<[RegExp, string]> = [
   [/plus\b/iy, '+'],
   [/minus\b/iy, '-'],
   [/times\b/iy, '*'],
   [/divided\s+by\b/iy, '/'],
 ];
+
+const SCALES: Record<string, number> = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, bn: 1e9, billion: 1e9 };
 
 function unitOf(prefix: string | undefined, suffix: string | undefined): Unit {
   if (prefix) return 'money';
@@ -98,7 +100,7 @@ function tokenAt(t: string, pos: number, prev: Token | undefined): Token | null 
   const n = /[\w]/.test(t[pos - 1] ?? '') && prev?.end !== pos ? null : at(NUMBER);
   if (n) {
     const value = toNumber(n[2]) / (n[3] ? 100 : 1);
-    return { ...base, kind: 'num', end: pos + n[0].length, raw: n[2], value: n[5] ? value * 1000 : value, pct: Boolean(n[3]), unit: unitOf(n[1], n[4]) };
+    return { ...base, kind: 'num', end: pos + n[0].length, raw: n[2], value: value * (SCALES[(n[5] ?? n[6] ?? '').toLowerCase()] ?? 1), pct: Boolean(n[3]), unit: unitOf(n[1], n[4]) };
   }
   // "2% of $5,000" multiplies; "x" multiplies only in front of a number, bracket or label ("2.5x" is a multiple).
   if (prev?.kind === 'num' && prev.pct) {
@@ -248,7 +250,10 @@ function leftSide(run: Token[]): Token[] | null {
   }
   side = side.filter((t) => t.kind !== 'label');
   for (let i = side.length - 1; i > 0; i--) {
-    if (side[i].kind === 'num' && side[i - 1].kind === 'num') return side.slice(i);
+    if (side[i].kind !== 'num' || side[i - 1].kind !== 'num') continue;
+    // "1/2 $300": a fraction of an amount, not a thread number.
+    const fraction = side[i - 2]?.op === '/' && side[i - 1].value >= 2 && side[i - 1].value <= 4;
+    return fraction && side[i].unit === 'money' ? null : side.slice(i);
   }
   return side;
 }
@@ -261,11 +266,13 @@ function result(run: Token[]): { num: Num; sign: string; next: number } | null {
 }
 
 /** Whether a bare number in the result's unit can be compared with the left side at all. */
-function comparable(left: Token[], res: Num): boolean {
+function comparable(left: Token[], res: Num, line: string): boolean {
   const has = (u: Unit) => nums(left).some((n) => n.unit === u);
   const money = nums(left).filter((n) => n.unit === 'money').length;
   const divides = hasOp(left, '/');
-  if (res.pct && (has('money') || has('lot') || has('pip')) && !divides) return nums(left).some((n) => n.pct); // "$300 of the account = 6%"
+  // "0.5 lots x 25 pips x $10 = 2.5%" is of an account we can't see.
+  const hidden = has('lot') || has('pip') || (has('money') && /\b(?:account|balance|equity)\b/i.test(line));
+  if (res.pct && hidden && !divides) return nums(left).some((n) => n.pct);
   switch (res.unit) {
     case 'money':
       return money > 0 || !(has('pip') || has('lot') || has('R')); // hides a pip value or the size of 1R
@@ -332,13 +339,15 @@ function mixesCurrencies(sum: string): boolean {
 function sumLines(text: string): string[] {
   const out: string[] = [];
   for (const line of text.split('\n')) {
+    // "= ..." after a blank line still belongs to the sum above it.
+    if (/^\s*=(?!>)/.test(line)) while (out.length && !out[out.length - 1].trim()) out.pop();
     const prev = out[out.length - 1]?.trimEnd();
     const unfinished = prev !== undefined && /(?:[=~]|[\d)%a-z]\s*[-+*/×÷^]|[\d)%a-z]\s+x|\b(?:equals|plus|minus|times|divided\s+by))$/i.test(prev) && /\d/.test(prev);
     const continues =
       prev !== undefined &&
       /[\d)%a-z]$/i.test(prev) &&
       /\d/.test(prev) &&
-      (/^\s*(?:=(?!>)|~\s|[×÷]|\/\s|x\s+[\d($]|(?:equals|plus|minus|times|divided\s+by)\s)/i.test(line) ||
+      (/^\s*(?:=(?!>)|[×÷]|\/\s|x\s+[\d($]|(?:equals|plus|minus|times|divided\s+by)\s)/i.test(line) ||
         // A leading "-", "+" or "*" is a bullet unless the line before is an open sum.
         (/^\s*[-+*]\s*[\d($(]/.test(line) && !LIST_MARK.test(prev) && !/[=~]/.test(prev) && /[\d)%R]\s*(?:[*×÷/]|x\s)\s*[\d($]/i.test(prev) && /[\d)%R]$/.test(prev)));
     if ((unfinished || continues) && line.trim()) out[out.length - 1] = `${prev} ${line.trimStart()}`;
@@ -347,7 +356,55 @@ function sumLines(text: string): string[] {
   return out;
 }
 
-const LOSS_CONTEXT = /\b(?:loss(?:es)?|lose[sr]?|losers|losing|lost|drawdown|down|stopped|stops?\s+(?:\w+\s+)?hit|(?:more|another)\s+stops?)\b/i;
+const LOSS_CONTEXT =
+  /\b(?:loss(?:es)?|lose[sr]?|losers|losing|lost|drawdown|down\s+(?:(?:to|by|at)\s+)?-?\d[\d.]*\s*(?:%|R)|(?:account|day|week|month)(?:'s|\s+is)?\s+down|stopped|stops?\s+(?:\w+\s+)?hit|(?:more|another)\s+stops?)(?![a-z])/i;
+
+/** Whether + or - joins amounts in different units: "1.1000 - 25 pips", "2R + $50". */
+function mixesUnits(tokens: Token[]): boolean {
+  type Term = Set<Unit | '%'>;
+  let mixed = false;
+  const close = (terms: Term[]) => {
+    const kinds = terms.filter((t) => t.size === 1).map((t) => [...t][0]);
+    const has = (u: Unit | '%') => kinds.includes(u);
+    const units = new Set(kinds.filter((u) => u && u !== '%'));
+    if (units.size > 1 || (has('pip') && has('')) || (has('R') && has('%'))) mixed = true;
+  };
+  const stack: Term[][] = [[new Set()]];
+  for (const t of tokens) {
+    const terms = stack[stack.length - 1];
+    const term = terms[terms.length - 1];
+    if (t.kind === 'num') {
+      const kind = t.pct ? '%' : t.unit;
+      // A bare or % factor doesn't change what the term counts: "40% x 2R" is R.
+      if (kind === '' || kind === '%') {
+        if (!term.size) term.add(kind);
+      } else {
+        term.delete('');
+        term.delete('%');
+        term.add(kind);
+      }
+    } else if (t.op === '+' || t.op === '-') {
+      if (term.size) terms.push(new Set());
+    } else if (t.op === '(') stack.push([new Set()]);
+    else if (t.op === ')' && stack.length > 1) {
+      const inner = stack.pop()!;
+      close(inner);
+      const outer = stack[stack.length - 1][stack[stack.length - 1].length - 1];
+      for (const kind of inner.flatMap((i) => [...i])) if (kind || !outer.size) outer.add(kind);
+      if (outer.size > 1) outer.delete('');
+    }
+  }
+  for (const terms of stack) close(terms);
+  return mixed;
+}
+
+/** How many pips one unit of price can be, judged by how the prices are written. */
+function pipScales(left: Token[]): number[] {
+  const places = Math.max(...nums(left).map((n) => decimals(n.raw)));
+  if (places >= 4) return [10000];
+  if (places >= 2) return nums(left).some((n) => n.value >= 500) ? [10, 100] : [100]; // gold counts 0.1 or 0.01
+  return places === 1 ? [1, 10] : [];
+}
 
 /** Values the left side may mean, in the units the result is written in. */
 function candidates(left: Token[], res: Num, sign: string, aboutLosses: boolean): number[] {
@@ -355,13 +412,14 @@ function candidates(left: Token[], res: Num, sign: string, aboutLosses: boolean)
   const out: number[] = [];
   const addsOnly = !hasOp(left, '*', '/', '^');
   for (const v of values) {
-    out.push(res.pct ? v * 100 : v);
+    const prices = res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip' || n.pct) && pipScales(left).some((p) => p > 10);
+    if (!prices) out.push(res.pct ? v * 100 : v);
     if (res.pct && (timesHundred(left) || (addsOnly && !nums(left).some((n) => n.pct)))) out.push(v); // "3 ÷ 7 x 100 = 42.9%"
     if (!res.pct && !res.unit && addsOnly && nums(left).every((n) => n.pct)) out.push(v * 100); // "70% - 30% = 40 points"
     if (res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip')) {
       if (nums(left).every((n) => n.pct)) out.push(v * 100);
-      // Two prices: a pip is 0.0001, 0.01 or 0.1 depending on the market, and only the distance is meant.
-      for (const perUnit of [1, 10, 100, 10000]) out.push(Math.abs(v) * perUnit);
+      // Two prices: only the distance is meant.
+      for (const perUnit of pipScales(left)) out.push(Math.abs(v) * perUnit);
     }
   }
   // "3 losses x 1% = -3%", "1% + 1% = -2%": the minus marks a loss, when the text says so.
@@ -380,90 +438,119 @@ function checkEquations(text: string): string[] {
   const issues: string[] = [];
   const lines = sumLines(clean(text));
   for (const [n, raw] of lines.entries()) {
-    const line = raw.replace(LIST_MARK, '');
-    const signs = [...line.matchAll(/(?<![<>!=])=(?![=>])|~|\bequals\b/gi)];
-    signs.forEach((m) => {
-      const before = line.slice(0, m.index).trimEnd();
-      const run = runs(before).pop();
-      if (!run || run[run.length - 1].end !== before.length) return;
-      const left = leftSide(run);
-      if (!left || !isSum(left) || !left.length) return;
-      const from = left[0].start;
-      const lead = line.slice(0, from);
-      const joined = run[run.indexOf(left[0]) - 1];
-      if (joined?.kind === 'op' && joined.op !== '(' && joined.op !== ')') return;
-      // "balance - 50 - 50 = ...": the first amount is a word.
-      if (isOperator(left[0]) && /[a-z)]\s*$/i.test(lead)) return;
-      if (CUT_SHORT.test(lead)) return;
-
-      const rest = line.slice(m.index! + m[0].length);
-      const about = APPROX_AFTER.exec(rest);
-      const after = rest.slice(about?.[0].length ?? 0);
-      const oneIn = /^\s*(\d+)\s+(?:in|out of)\s+(\d+)\b/i.exec(after);
-      const rightRun = runs(after)[0];
-      if (!rightRun || after.slice(0, rightRun[0].start).trim()) return;
-      const res = result(rightRun);
-      if (!res) return;
-      const { num, sign } = res;
-      const tail = after.slice(num.end);
-      if (/^:\d/.test(tail)) return; // a ratio
-      const approx = m[0] === '~' || Boolean(about) || APPROX_BEFORE.test(lead);
-
-      const value = evaluate(left, false);
-      if (value === null) return;
-      if (oneIn) {
-        if (Math.abs(value - Number(oneIn[1]) / Number(oneIn[2])) <= value * 0.1) return;
-        issues.push(`maths: "${line.slice(from, m.index).trim()} ${m[0]} ${oneIn[0].trim()}" but it works out to 1 in ${fmt(1 / value)}`);
-        return;
-      }
-      if (!comparable(left, num)) return;
-      const fullSum = `${line.slice(from, m.index)} ${after.slice(0, rightRun[rightRun.length - 1].end)}`;
-      if (mixesLotSizes(fullSum) || mixesCurrencies(fullSum)) return;
-
-      const scale = num.raw && num.value ? (num.value * (num.pct ? 100 : 1)) / toNumber(num.raw) : 1; // 1000 for "5k"
-      const options = candidates(left, num, sign, LOSS_CONTEXT.test(`${lines[n - 1] ?? ''}\n${line}`)).map((v) => v / scale);
-      const negative = sign === '-';
-      const right = rightRun.filter((t) => t.kind !== 'label');
-      const rightValue = isSum(right) ? evaluate(right, false) : null;
-      // A dash then words may be prose ("= 0.2R - 60% of the time"); any other complete sum is judged as a whole.
-      const proseDash = right[res.next]?.op === '-' && /^\s*[a-z]/i.test(after.slice(rightRun[rightRun.length - 1].end));
-      const whole = rightValue !== null && !proseDash;
-      // "3 ÷ 7 = 0.43 x 100 = 43%": the x 100 only turns the result into a percentage.
-      const toPercent = timesHundred(right) && /^\s*[=~]\s*[-+]?[\d.]+\s*%/.test(after.slice(rightRun[rightRun.length - 1].end));
-      if (toPercent && rightValue !== null && Math.abs(rightValue / 100 - value) <= roundingSlack(left, right, value) / 100 + (approx ? Math.abs(value) * 0.03 : 0) + 1e-9) return;
-      if (!whole && options.some((v) => matches(negative ? -v : v, num.raw, approx))) return;
-
-      if (/^\s+x\s+[a-z]/i.test(after.slice(rightRun[rightRun.length - 1].end))) return; // "= 2 x your size"
-
-      // The right-hand side may be a sum of its own: "(0.4 x 2) - (0.6 x 1) = 0.8 - 0.6 = +0.2R", or a range.
-      const range = right.length >= 3 && right[res.next]?.op === '-' && right[res.next + 1]?.kind === 'num' ? right[res.next + 1] : null;
-      if (range && range.start === right[res.next].end) {
-        const lo = toNumber(num.raw);
-        const hi = toNumber(range.raw);
-        const vals = range.pct && !num.pct ? options.map((v) => v * 100) : options;
-        if (hi > lo && vals.some((v) => v >= lo && v <= hi)) return;
-      }
-      if (right.length > res.next) {
-        // Unfinished ("= 2 x your stop"): can't be judged.
-        const last = right[right.length - 1];
-        if (isOperator(last) && last.op !== '-') return;
-        // The whole of it, or if that doesn't parse or may run into prose, the longest part that does.
-        for (let end = right.length; end > (whole ? right.length - 1 : res.next); end--) {
-          const part = right.slice(0, end);
-          const v = isSum(part) ? evaluate(part, false) : null;
-          if (v === null) continue;
-          for (const want of [value, evaluate(left, true) ?? value]) {
-            const slack = roundingSlack(left, part, want) + (approx ? Math.abs(want) * 0.03 : 0);
-            if (Math.abs(v - want) <= slack + 1e-9 * Math.max(1, Math.abs(want))) return;
-          }
-        }
-      }
-      const shownLeft = line.slice(from, m.index).trim();
-      const sumShown = right.length > res.next && rightValue !== null;
-      const shownRight = after.slice(0, sumShown ? rightRun[rightRun.length - 1].end : num.end).trim();
-      issues.push(`maths: "${shownLeft} ${m[0]} ${shownRight}" but it works out to ${fmt(options[0] * scale)}${num.pct ? '%' : num.unit === 'R' ? 'R' : ''}`);
-    });
+    const found = lineIssues(raw.replace(LIST_MARK, ''), lines[n - 1] ?? '');
+    // "- 50 + 20" and "1/2 (3 + 4)" may be part of the sum rather than a list mark: flag only what's wrong both ways.
+    const asWritten = /^\s*(?:[-+]\s|\d+\/)/.test(raw) ? lineIssues(raw, lines[n - 1] ?? '') : found;
+    for (const [k, issue] of found) if (asWritten.has(k)) issues.push(issue);
   }
+  return issues;
+}
+
+/** Wrong sums in one line, by the position of their "=" among the line's signs. */
+function lineIssues(line: string, previous: string): Map<number, string> {
+  const issues = new Map<number, string>();
+  const signs = [...line.matchAll(/(?<![<>!=])=(?![=>])|~|\bequals\b/gi)];
+  signs.forEach((m, k) => {
+    const before = line.slice(0, m.index).trimEnd();
+    const run = runs(before).pop();
+    if (!run || run[run.length - 1].end !== before.length) return;
+    const left = leftSide(run);
+    if (!left || !isSum(left) || !left.length) return;
+    const from = left[0].start;
+    const lead = line.slice(0, from);
+    const joined = run[run.indexOf(left[0]) - 1];
+    if (joined?.kind === 'op' && joined.op !== '(' && joined.op !== ')') return;
+    // "balance - 50 - 50 = ...": the first amount is a word.
+    if (isOperator(left[0]) && /[a-z)]\s*$/i.test(lead)) return;
+    if (CUT_SHORT.test(lead)) return;
+
+    const rest = line.slice(m.index! + m[0].length);
+    const about = APPROX_AFTER.exec(rest);
+    const after = rest.slice(about?.[0].length ?? 0);
+    const oneIn = /^\s*(\d+)\s+(?:in|out of)\s+(\d+)\b/i.exec(after);
+    const rightRun = runs(after)[0];
+    if (!rightRun || after.slice(0, rightRun[0].start).trim()) return;
+    const approx = m[0] === '~' || Boolean(about) || APPROX_BEFORE.test(lead);
+    const value = evaluate(left, false);
+    if (value === null || mixesUnits(left)) return;
+    const rightEnd = rightRun[rightRun.length - 1].end;
+    const goesOn = /^\s*[=~]/.test(after.slice(rightEnd));
+    const fullSum = `${line.slice(from, m.index)} ${after.slice(0, rightEnd)}`;
+    if (mixesLotSizes(fullSum) || mixesCurrencies(fullSum) || (/\bpips?\b/i.test(fullSum) && /\bpoints?\b/i.test(fullSum))) return;
+    const right = rightRun.filter((t) => t.kind !== 'label');
+    const near = (part: Token[], v: number) =>
+      [value, evaluate(left, true) ?? value].some((want) => {
+        const slack = roundingSlack(left, part, want) + (approx ? Math.abs(want) * 0.03 : 0);
+        return Math.abs(v - want) <= slack + 1e-9 * Math.max(1, Math.abs(want));
+      });
+
+    const res = result(rightRun);
+    if (!res) {
+      // "= (0.8 - 0.6)", which may run on: "= (0.8 - 0.6) x 100 trades = 20R".
+      if (evaluate(right, false) === null || !isSum(right)) return;
+      for (let end = right.length; end > (goesOn ? 0 : right.length - 1); end--) {
+        const v = evaluate(right.slice(0, end), false);
+        if (v !== null && near(right.slice(0, end), v)) return;
+      }
+      issues.set(k, `maths: "${line.slice(from, m.index).trim()} ${m[0]} ${after.slice(0, rightEnd).trim()}" but it works out to ${fmt(value)}`);
+      return;
+    }
+    const { num, sign } = res;
+    const tail = after.slice(num.end);
+    if (/^:\d/.test(tail)) return; // a ratio
+    if (oneIn) {
+      const n = Number(oneIn[1]) / value;
+      const off = Math.abs(n - Number(oneIn[2]));
+      if (value > 0 && off <= Math.max(0.5, approx ? n * 0.1 : 0)) return;
+      issues.set(k, `maths: "${line.slice(from, m.index).trim()} ${m[0]} ${oneIn[0].trim()}" but it works out to 1 in ${fmt(1 / value)}`);
+      return;
+    }
+    if (!comparable(left, num, line)) return;
+
+    const scale = num.raw && num.value ? (num.value * (num.pct ? 100 : 1)) / toNumber(num.raw) : 1; // 1000 for "5k"
+    // The sum's own sentence and the one before it (or the line above).
+    const sentences = lead.split(/(?<=[.!?])\s+/);
+    const ahead = rest.split(/(?<=[.!?])\s/)[0];
+    const nearby = `${sentences.length > 1 ? '' : previous}\n${sentences.slice(-2).join(' ')} ${line.slice(from, m.index)} ${ahead}`;
+    const options = candidates(left, num, sign, LOSS_CONTEXT.test(nearby)).map((v) => v / scale);
+    const negative = sign === '-';
+    const rightValue = isSum(right) ? evaluate(right, false) : null;
+    // A dash then words may be prose ("= 0.2R - 60% of the time"); any other complete sum is judged as a whole.
+    const proseDash = right[res.next]?.op === '-' && /^\s*[a-z]/i.test(after.slice(rightEnd));
+    const whole = rightValue !== null && !proseDash;
+    // "3 ÷ 7 = 0.43 x 100 = 43%": the x 100 only turns the result into a percentage.
+    const toPercent = timesHundred(right) && /^\s*[=~]\s*[-+]?[\d.]+\s*%/.test(after.slice(rightEnd));
+    if (toPercent && rightValue !== null && Math.abs(rightValue / 100 - value) <= roundingSlack(left, right, value) / 100 + (approx ? Math.abs(value) * 0.03 : 0) + 1e-9) return;
+    // A running calculation may carry on: "= 0.2R x 100 trades = 20R".
+    if ((!whole || goesOn) && options.some((v) => matches(negative ? -v : v, num.raw, approx))) return;
+
+    if (/^\s+x\s+[a-z]/i.test(after.slice(rightEnd))) return; // "= 2 x your size"
+
+    // The right-hand side may be a sum of its own: "(0.4 x 2) - (0.6 x 1) = 0.8 - 0.6 = +0.2R", or a range.
+    const range = right.length >= 3 && right[res.next]?.op === '-' && right[res.next + 1]?.kind === 'num' ? right[res.next + 1] : null;
+    if (range && range.start === right[res.next].end) {
+      const lo = toNumber(num.raw);
+      const hi = toNumber(range.raw);
+      const vals = range.pct && !num.pct ? options.map((v) => v * 100) : options;
+      if (hi > lo && vals.some((v) => v >= lo && v <= hi)) return;
+    }
+    if (right.length > res.next) {
+      // Unfinished ("= 2 x your stop"): can't be judged.
+      const last = right[right.length - 1];
+      if (isOperator(last) && last.op !== '-') return;
+      // The whole of it, or if that doesn't parse or may run into prose, the longest part that does.
+      for (let end = right.length; end > (whole ? right.length - 1 : res.next); end--) {
+        const part = right.slice(0, end);
+        const v = isSum(part) ? evaluate(part, false) : null;
+        if (v === null) continue;
+        if (near(part, v)) return;
+      }
+    }
+    const shownLeft = line.slice(from, m.index).trim();
+    const sumShown = right.length > res.next && rightValue !== null;
+    const shownRight = after.slice(0, sumShown ? rightEnd : num.end).trim();
+    issues.set(k, `maths: "${shownLeft} ${m[0]} ${shownRight}" but it works out to ${fmt(options[0] * scale)}${num.pct ? '%' : num.unit === 'R' ? 'R' : ''}`);
+    });
   return issues;
 }
 

@@ -478,16 +478,28 @@ function lineIssues(line: string, previous: string): Map<number, string> {
     const fullSum = `${line.slice(from, m.index)} ${after.slice(0, rightEnd)}`;
     if (mixesLotSizes(fullSum) || mixesCurrencies(fullSum) || (/\bpips?\b/i.test(fullSum) && /\bpoints?\b/i.test(fullSum))) return;
     const right = rightRun.filter((t) => t.kind !== 'label');
-    const near = (part: Token[], v: number) =>
-      [value, evaluate(left, true) ?? value].some((want) => {
+    // The sum's own sentence and the one before it (or the line above).
+    const sentences = lead.split(/(?<=[.!?])\s+/);
+    const ahead = rest.split(/(?<=[.!?])\s/)[0];
+    const nearby = `${sentences.length > 1 ? '' : previous}\n${sentences.slice(-2).join(' ')} ${line.slice(from, m.index)} ${ahead}`;
+    const aboutLosses = LOSS_CONTEXT.test(nearby);
+    // Not when a dash leads into prose: "= 0.9R - 60% of the time".
+    if (mixesUnits(right) && !(hasOp(right, '-') && /^\s*[a-z]/i.test(after.slice(rightEnd)))) return;
+    const near = (part: Token[], v: number) => {
+      // The right side in its own units: "1.1050 - 1.1000 = 25 pips + 25 pips".
+      const own = nums(part).find((n) => n.unit || n.pct) ?? nums(part)[0];
+      return candidates(left, own, v < 0 ? '-' : '', aboutLosses).some((c) => {
+        const want = own.pct ? c / 100 : c;
         const slack = roundingSlack(left, part, want) + (approx ? Math.abs(want) * 0.03 : 0);
         return Math.abs(v - want) <= slack + 1e-9 * Math.max(1, Math.abs(want));
       });
+    };
 
     const res = result(rightRun);
     if (!res) {
       // "= (0.8 - 0.6)", which may run on: "= (0.8 - 0.6) x 100 trades = 20R".
-      if (evaluate(right, false) === null || !isSum(right)) return;
+      const own = nums(right).find((n) => n.unit || n.pct) ?? nums(right)[0];
+      if (evaluate(right, false) === null || !isSum(right) || !comparable(left, own, line)) return;
       for (let end = right.length; end > (goesOn ? 0 : right.length - 1); end--) {
         const v = evaluate(right.slice(0, end), false);
         if (v !== null && near(right.slice(0, end), v)) return;
@@ -508,11 +520,7 @@ function lineIssues(line: string, previous: string): Map<number, string> {
     if (!comparable(left, num, line)) return;
 
     const scale = num.raw && num.value ? (num.value * (num.pct ? 100 : 1)) / toNumber(num.raw) : 1; // 1000 for "5k"
-    // The sum's own sentence and the one before it (or the line above).
-    const sentences = lead.split(/(?<=[.!?])\s+/);
-    const ahead = rest.split(/(?<=[.!?])\s/)[0];
-    const nearby = `${sentences.length > 1 ? '' : previous}\n${sentences.slice(-2).join(' ')} ${line.slice(from, m.index)} ${ahead}`;
-    const options = candidates(left, num, sign, LOSS_CONTEXT.test(nearby)).map((v) => v / scale);
+    const options = candidates(left, num, sign, aboutLosses).map((v) => v / scale);
     const negative = sign === '-';
     const rightValue = isSum(right) ? evaluate(right, false) : null;
     // A dash then words may be prose ("= 0.2R - 60% of the time"); any other complete sum is judged as a whole.

@@ -312,6 +312,14 @@ function roundingSlack(left: Token[], right: Token[], value: number): number {
   return slack;
 }
 
+/** "0.2 standard lots + 2 mini lots": different sizes, so the numbers don't add up as written. A plain lot is standard. */
+function mixesLotSizes(sum: string): boolean {
+  const sizes = [...sum.matchAll(/\b(standard|mini|micro)\b|\blots?\b/gi)]
+    .filter((m) => m[1] || !/\b(?:standard|mini|micro)[\s-]*$/i.test(sum.slice(0, m.index)))
+    .map((m) => (m[1] ?? 'standard').toLowerCase());
+  return new Set(sizes).size > 1;
+}
+
 const LOSS_CONTEXT = /\b(?:loss(?:es)?|lose[sr]?|losers|losing|lost|drawdown|down|stopped|stops?\s+(?:\w+\s+)?hit|(?:more|another)\s+stops?)\b/i;
 
 /** Values the left side may mean, in the units the result is written in. */
@@ -382,6 +390,7 @@ function checkEquations(text: string): string[] {
         return;
       }
       if (!comparable(left, num)) return;
+      if (mixesLotSizes(`${line.slice(from, m.index)} ${after.slice(0, rightRun[rightRun.length - 1].end)}`)) return;
 
       const scale = num.raw && num.value ? (num.value * (num.pct ? 100 : 1)) / toNumber(num.raw) : 1; // 1000 for "5k"
       const options = candidates(left, num, sign, LOSS_CONTEXT.test(`${lines[n - 1] ?? ''}\n${line}`)).map((v) => v / scale);

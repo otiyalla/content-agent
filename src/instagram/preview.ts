@@ -82,11 +82,13 @@ ${section}</div>`;
 
 /** Tells the team a post didn't go out, and why. Returns false if the email failed. */
 export async function sendMissedNotice(week: string, post: CalendarPost, reason: string): Promise<boolean> {
+  // A hand-edited post can lack either.
+  const id = String(post.id ?? '(no id)');
   return emailService.sendHtml(
-    `[Zenlot IG] Not published: ${post.id}`,
-    `<p><code>${esc(post.id)}</code> (${esc(post.topic)}) was not published: ${esc(reason)}.</p>
+    `[Zenlot IG] Not published: ${id}`,
+    `<p><code>${esc(id)}</code> (${esc(String(post.topic ?? '(no topic)'))}) was not published: ${esc(reason)}.</p>
 <p>To use it later, fix the cause, change its <code>"scheduledAt"</code> and set its <code>"status"</code> to <code>"scheduled"</code> in <code>content/instagram/calendar/${week}.json</code>.</p>`,
     [],
-    path.join('out', 'instagram', week, `missed-${post.id}.html`),
+    path.join('out', 'instagram', week, `missed-${id.replace(/[^\w-]/g, '_')}.html`),
   );
 }

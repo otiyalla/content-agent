@@ -118,9 +118,19 @@ function recordFailure(post: CalendarPost, err: unknown): boolean {
   return post.status === 'missed';
 }
 
+/** Sends a notice. An error counts as "not sent": one broken post must not stop the others. */
+async function sendNotice(week: string, post: CalendarPost, reason: string): Promise<boolean> {
+  try {
+    return await sendMissedNotice(week, post, reason);
+  } catch (err) {
+    console.error(`  ❌ notice for ${post.id}: ${err instanceof Error ? err.message : err}`);
+    return false;
+  }
+}
+
 /** Emails that a post was missed. The reason stays on the post until the email goes out, so later runs retry. */
 async function notifyMissed(cal: WeekCalendar, post: CalendarPost, reason = post.missedNotice ?? ''): Promise<void> {
-  if (!(await sendMissedNotice(cal.week, post, reason))) {
+  if (!(await sendNotice(cal.week, post, reason))) {
     console.error(`  ❌ notice email for ${post.id} was not sent; retried next run`);
     return;
   }
@@ -180,7 +190,7 @@ async function main() {
         failures++;
         console.error(`  ❌ ${post.id}: ${problem}. Not publishing it until that's fixed.`);
         // Emailed once per problem: the post stays as it is until someone fixes the date.
-        if (post.lastError !== problem && (await sendMissedNotice(week, post, problem)) && !env.DRY_RUN) {
+        if (post.lastError !== problem && (await sendNotice(week, post, problem)) && !env.DRY_RUN) {
           post.lastError = problem;
           saveCalendar(cal);
         }

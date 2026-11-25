@@ -46,6 +46,9 @@ test('every kind of missed post is emailed once, and retried if the email fails'
   const file = path.join(dir, 'content/instagram/calendar/2026-W48.json');
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const posts = [
+    { id: 'no-topic-undated', scheduledAt: 'soon', status: 'scheduled' },
+    { scheduledAt: '2026-11-23T13:00:00.000Z', status: 'scheduled' },
+    { id: 'no-topic-third', scheduledAt: '2026-11-25T13:00:00.000Z', status: 'failed', attempts: 2 },
     null,
     'stray',
     post('late', { scheduledAt: '2026-11-23T13:00:00.000Z' }),
@@ -83,7 +86,7 @@ test('every kind of missed post is emailed once, and retried if the email fails'
 
     const smtp = { SMTP_HOST: '127.0.0.1', SMTP_PORT: String((server.address() as net.AddressInfo).port), SMTP_USER: 'u', SMTP_PASS: 'p' };
     const second = await publish(smtp);
-    assert.deepEqual(subjects.map((s) => s.split(': ')[1]).sort(), ['late', 'third', 'undated'], second);
+    assert.deepEqual(subjects.map((s) => s.split(': ')[1]).sort(), ['(no id)', 'late', 'no-topic-third', 'no-topic-undated', 'third', 'undated'], second);
     assert.equal(read('late').missedNotice, undefined);
     assert.equal(read('again').status, 'failed');
     assert.equal(read('future').status, 'scheduled');

@@ -63,6 +63,7 @@ type Token = {
   pct: boolean;
   unit: Unit;
   op: string;
+  counted?: boolean; // num: a label follows, as in "100 trades"
 };
 type Num = Token & { kind: 'num' };
 
@@ -140,6 +141,8 @@ function runs(line: string): Token[][] {
     const midWord = /[a-z]/i.test(line[pos]) && /[a-z]/i.test(line[pos - 1] ?? '');
     const tok = midWord ? null : tokenAt(line, pos, run[run.length - 1]);
     if (tok) {
+      const prev = run[run.length - 1];
+      if (tok.kind === 'label' && prev?.kind === 'num') prev.counted = true;
       run.push(tok);
       pos = tok.end;
     } else {
@@ -298,7 +301,7 @@ function enclosed(tokens: Token[]): boolean {
   });
 }
 
-/** Whether the sum itself turns a fraction into a percentage: "3 ÷ 7 x 100". Dividing by 100 doesn't count. */
+/** Whether the sum itself turns a fraction into a percentage: "3 ÷ 7 x 100". Dividing by 100, or "100 trades", doesn't count. */
 function timesHundred(sum: Token[]): boolean {
   let left = sum;
   while (enclosed(left)) left = left.slice(1, -1);
@@ -306,7 +309,7 @@ function timesHundred(sum: Token[]): boolean {
   return left.some((t, i) => {
     if (t.op === '(') depth++;
     if (t.op === ')') depth--;
-    if (depth || t.kind !== 'num' || t.pct || t.value !== 100) return false;
+    if (depth || t.kind !== 'num' || t.pct || t.unit || t.counted || t.value !== 100) return false;
     return left[i - 1]?.op === '*' || (i === 0 && left[1]?.op === '*');
   });
 }

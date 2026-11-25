@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { env } from '../config/env';
 import { lintCopy, lintReply } from '../content/brand-guard';
+import { textMathIssues } from '../instagram/math-check';
 import { emailService } from './email.service';
 
 // ---------------------------------------------------------------------------
@@ -78,13 +79,14 @@ class OutboxService {
    */
   allow(draft: OutboundDraft): string | null {
     const { text, issue } = withDisclaimer(draft);
-    const issues = [...lintCopy(`${draft.title ?? ''}\n${text}`), ...(draft.kind === 'reply' ? lintReply(text) : []), ...(issue ? [issue] : [])];
+    const all = `${draft.title ?? ''}\n${text}`;
+    const issues = [...lintCopy(all), ...textMathIssues(all), ...(draft.kind === 'reply' ? lintReply(text) : []), ...(issue ? [issue] : [])];
 
     if (draft.kind === 'post' && env.AGENTS_AUTOPOST && !env.OWNER_AWAY && issues.length === 0) return text;
 
     this.held.push({ ...draft, text, issues, workflow: '', heldAt: new Date().toISOString() });
     const reason = issues.length
-      ? `brand check: ${issues.join('; ')}`
+      ? `checks: ${issues.join('; ')}`
       : draft.kind === 'reply'
         ? 'replies always wait for a person'
         : env.OWNER_AWAY

@@ -320,6 +320,33 @@ function mixesLotSizes(sum: string): boolean {
   return new Set(sizes).size > 1;
 }
 
+/** "EUR 100 + USD 100 = USD 210" needs an exchange rate. "$" counts as USD unless a code follows the amount ("$50 CAD"). */
+function mixesCurrencies(sum: string): boolean {
+  const same: Record<string, string> = { $: 'USD', '€': 'EUR', '£': 'GBP', DOLLAR: 'USD', DOLLARS: 'USD' };
+  const text = sum.replace(/\$(?=\s*[\d.,]*\d\s*(?:CAD|AUD|NZD)\b)/gi, '');
+  const found = [...text.matchAll(/[$€£]|\b(?:USD|EUR|GBP|CAD|AUD|NZD|CHF|dollars?)(?![a-z])/gi)].map((m) => m[0].toUpperCase());
+  return new Set(found.map((c) => same[c] ?? c)).size > 1;
+}
+
+/** Lines of text, with a sum that wraps onto the next line put back together. List items stay apart. */
+function sumLines(text: string): string[] {
+  const out: string[] = [];
+  for (const line of text.split('\n')) {
+    const prev = out[out.length - 1]?.trimEnd();
+    const unfinished = prev !== undefined && /(?:[=~]|[\d)%a-z]\s*[-+*/×÷^]|[\d)%a-z]\s+x|\b(?:equals|plus|minus|times|divided\s+by))$/i.test(prev) && /\d/.test(prev);
+    const continues =
+      prev !== undefined &&
+      /[\d)%a-z]$/i.test(prev) &&
+      /\d/.test(prev) &&
+      (/^\s*(?:=(?!>)|~\s|[×÷]|\/\s|x\s+[\d($]|(?:equals|plus|minus|times|divided\s+by)\s)/i.test(line) ||
+        // A leading "-", "+" or "*" is a bullet unless the line before is an open sum.
+        (/^\s*[-+*]\s*[\d($(]/.test(line) && !LIST_MARK.test(prev) && !/[=~]/.test(prev) && /[\d)%R]\s*(?:[*×÷/]|x\s)\s*[\d($]/i.test(prev) && /[\d)%R]$/.test(prev)));
+    if ((unfinished || continues) && line.trim()) out[out.length - 1] = `${prev} ${line.trimStart()}`;
+    else if (line.trim() || !unfinished) out.push(line);
+  }
+  return out;
+}
+
 const LOSS_CONTEXT = /\b(?:loss(?:es)?|lose[sr]?|losers|losing|lost|drawdown|down|stopped|stops?\s+(?:\w+\s+)?hit|(?:more|another)\s+stops?)\b/i;
 
 /** Values the left side may mean, in the units the result is written in. */
@@ -351,7 +378,7 @@ const LIST_MARK = /^\s*(?:[-+*•]\s+|\d+[.)]\s+|\d+\/\d*\s+(?=[^\s\-+*/×÷x=~^
 
 function checkEquations(text: string): string[] {
   const issues: string[] = [];
-  const lines = clean(text).split('\n');
+  const lines = sumLines(clean(text));
   for (const [n, raw] of lines.entries()) {
     const line = raw.replace(LIST_MARK, '');
     const signs = [...line.matchAll(/(?<![<>!=])=(?![=>])|~|\bequals\b/gi)];
@@ -390,7 +417,8 @@ function checkEquations(text: string): string[] {
         return;
       }
       if (!comparable(left, num)) return;
-      if (mixesLotSizes(`${line.slice(from, m.index)} ${after.slice(0, rightRun[rightRun.length - 1].end)}`)) return;
+      const fullSum = `${line.slice(from, m.index)} ${after.slice(0, rightRun[rightRun.length - 1].end)}`;
+      if (mixesLotSizes(fullSum) || mixesCurrencies(fullSum)) return;
 
       const scale = num.raw && num.value ? (num.value * (num.pct ? 100 : 1)) / toNumber(num.raw) : 1; // 1000 for "5k"
       const options = candidates(left, num, sign, LOSS_CONTEXT.test(`${lines[n - 1] ?? ''}\n${line}`)).map((v) => v / scale);

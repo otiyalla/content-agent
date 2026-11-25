@@ -279,9 +279,9 @@ function comparable(left: Token[], res: Num, line: string): boolean {
     case 'lot':
       return has('lot') || (has('pip') ? money > 1 : true);
     case 'R':
-      return has('R') || divides || !(has('money') || has('pip') || has('lot'));
+      return has('R') || (['money', 'pip', 'lot'] as Unit[]).every((u) => !has(u) || dividesBy(left, u));
     case 'pip':
-      return has('pip') || !(has('money') || has('lot'));
+      return has('pip') || !(has('money') || has('lot') || (priceDistance(left) && pipScale(left) === null));
     default:
       return true;
   }
@@ -411,12 +411,35 @@ function mixesUnits(tokens: Token[]): boolean {
   return mixed;
 }
 
-/** How many pips one unit of price can be, judged by how the prices are written. */
-function pipScales(left: Token[]): number[] {
-  const places = Math.max(...nums(left).map((n) => decimals(n.raw)));
-  if (places >= 4) return [10000];
-  if (places >= 2) return nums(left).some((n) => n.value >= 500) ? [10, 100] : [100]; // gold counts 0.1 or 0.01
-  return places === 1 ? [1, 10] : [];
+/**
+ * How many pips one unit of price is: 10,000 for prices like 1.1050, 100 for yen prices like 150.50, 1 for whole
+ * numbers of pips. Null when the prices don't settle it (gold, indices, "0.50"): how many zeros are written isn't enough.
+ */
+function pipScale(left: Token[]): number | null {
+  const prices = nums(left);
+  const all = (lo: number, hi: number, places: number) =>
+    prices.every((n) => n.value >= lo && n.value <= hi) && prices.some((n) => decimals(n.raw) >= places);
+  if (prices.every((n) => !decimals(n.raw))) return 1;
+  if (all(0.1, 10, 4)) return 10000;
+  return all(80, 250, 2) ? 100 : null;
+}
+
+/** Whether it only adds or subtracts plain numbers, so a result in pips means a distance between prices. */
+const priceDistance = (left: Token[]) => !hasOp(left, '*', '/', '^') && nums(left).every((n) => !n.unit && !n.pct);
+
+/** Whether a division's denominator counts in this unit: "$300 ÷ $100" does, "$200 ÷ 2 trades" doesn't. */
+function dividesBy(tokens: Token[], unit: Unit): boolean {
+  return tokens.some((t, i) => {
+    if (t.op !== '/') return false;
+    let depth = 0;
+    for (let j = i + 1; j < tokens.length; j++) {
+      if (tokens[j].op === '(') depth++;
+      if (tokens[j].op === ')') depth--;
+      if (tokens[j].kind === 'num' && tokens[j].unit === unit) return true;
+      if (depth <= 0) return false;
+    }
+    return false;
+  });
 }
 
 /** Values the left side may mean, in the units the result is written in. */
@@ -425,14 +448,15 @@ function candidates(left: Token[], res: Num, sign: string, aboutLosses: boolean)
   const out: number[] = [];
   const addsOnly = !hasOp(left, '*', '/', '^');
   for (const v of values) {
-    const prices = res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip' || n.pct) && pipScales(left).some((p) => p > 10);
+    const prices = res.unit === 'pip' && priceDistance(left) && pipScale(left) !== 1;
     if (!prices) out.push(res.pct ? v * 100 : v);
     if (res.pct && !nums(left).some((n) => n.pct) && (timesHundred(left) || addsOnly)) out.push(v); // "3 ÷ 7 x 100 = 42.9%"
     if (!res.pct && !res.unit && addsOnly && nums(left).every((n) => n.pct)) out.push(v * 100); // "70% - 30% = 40 points"
     if (res.unit === 'pip' && addsOnly && !nums(left).some((n) => n.unit === 'pip')) {
       if (nums(left).every((n) => n.pct)) out.push(v * 100);
       // Two prices: only the distance is meant.
-      for (const perUnit of pipScales(left)) out.push(Math.abs(v) * perUnit);
+      const perUnit = pipScale(left);
+      if (perUnit && perUnit !== 1) out.push(Math.abs(v) * perUnit);
     }
   }
   // "3 losses x 1% = -3%", "1% + 1% = -2%": the minus marks a loss, when the text says so.

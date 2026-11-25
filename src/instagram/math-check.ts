@@ -291,6 +291,27 @@ function timesHundred(left: Token[]): boolean {
   });
 }
 
+/**
+ * How far a right-hand sum may be from the left because its numbers were rounded when written ("1 ÷ 3 = 0.17 + 0.17").
+ * Nothing if the left is exact at the precision shown; otherwise what half a unit in each decimal it introduces could change.
+ */
+function roundingSlack(left: Token[], right: Token[], value: number): number {
+  const places = Math.max(...nums(right).map((n) => decimals(n.raw) + (n.pct ? 2 : 0)));
+  const scaled = value * 10 ** places;
+  if (!hasOp(left, '/', '^') && Math.abs(scaled - Math.round(scaled)) < 1e-6) return 0;
+  const base = evaluate(right, false);
+  if (base === null) return 0;
+  const given = new Set(nums(left).map((n) => n.raw));
+  let slack = 0;
+  right.forEach((t, i) => {
+    if (t.kind !== 'num' || !decimals(t.raw) || given.has(t.raw)) return;
+    const half = (10 ** -decimals(t.raw) / 2) * Math.abs(t.value / (toNumber(t.raw) || 1)); // keeps % and k
+    const moved = evaluate(right.map((o, j) => (j === i ? { ...o, value: o.value + half } : o)), false);
+    if (moved !== null) slack += Math.abs(moved - base);
+  });
+  return slack;
+}
+
 const LOSS_CONTEXT = /\b(?:loss(?:es)?|lose[sr]?|losers|losing|lost|drawdown|down|stopped|stops?\s+(?:\w+\s+)?hit|(?:more|another)\s+stops?)\b/i;
 
 /** Values the left side may mean, in the units the result is written in. */
@@ -372,7 +393,7 @@ function checkEquations(text: string): string[] {
       const whole = rightValue !== null && !proseDash;
       // "3 ÷ 7 = 0.43 x 100 = 43%": the x 100 only turns the result into a percentage.
       const toPercent = timesHundred(right) && /^\s*[=~]\s*[-+]?[\d.]+\s*%/.test(after.slice(rightRun[rightRun.length - 1].end));
-      if (toPercent && rightValue !== null && Math.abs(rightValue / 100 - value) <= Math.abs(value) * 0.01) return;
+      if (toPercent && rightValue !== null && Math.abs(rightValue / 100 - value) <= roundingSlack(left, right, value) / 100 + (approx ? Math.abs(value) * 0.03 : 0) + 1e-9) return;
       if (!whole && options.some((v) => matches(negative ? -v : v, num.raw, approx))) return;
 
       if (/^\s+x\s+[a-z]/i.test(after.slice(rightRun[rightRun.length - 1].end))) return; // "= 2 x your size"
@@ -394,10 +415,10 @@ function checkEquations(text: string): string[] {
           const part = right.slice(0, end);
           const v = isSum(part) ? evaluate(part, false) : null;
           if (v === null) continue;
-          const unit = 10 ** -Math.max(...nums(part).map((n) => decimals(n.raw) + (n.pct ? 2 : 0)));
-          if (Math.abs(v - value) <= Math.max(unit / 2, Math.abs(value) * 0.01) + 1e-9) return;
-          const other = evaluate(left, true);
-          if (other !== null && Math.abs(v - other) <= Math.max(unit / 2, Math.abs(other) * 0.01) + 1e-9) return;
+          for (const want of [value, evaluate(left, true) ?? value]) {
+            const slack = roundingSlack(left, part, want) + (approx ? Math.abs(want) * 0.03 : 0);
+            if (Math.abs(v - want) <= slack + 1e-9 * Math.max(1, Math.abs(want))) return;
+          }
         }
       }
       const shownLeft = line.slice(from, m.index).trim();

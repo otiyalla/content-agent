@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { performanceSummary } from '../src/instagram/strategist';
+import { keepLinkTaps, unsplitWarning } from '../src/instagram/insights';
 import type { CalendarPost, PostInsights } from '../src/instagram/types';
 
 const post = (n: number, at7d?: Partial<PostInsights>, at48h?: Partial<PostInsights>): CalendarPost =>
@@ -80,4 +81,27 @@ test('without enough follows, lines show counts but no rate per 1,000', () => {
   const s = performanceSummary(many(10, (n) => ({ reach: 200, follows: n === 3 ? 1 : 0, saved: n === 3 ? 9 : 0 })));
   assert.match(s, /follows 1, profile/);
   assert.doesNotMatch(s, /per 1k reach\)/);
+});
+
+test('item 4: unknown link taps say so, and a blank fetch keeps the earlier count', () => {
+  const s = performanceSummary(many(10, (n) => ({ reach: 200, saved: n, ...(n === 9 ? {} : { linkTaps: 0 }) })));
+  assert.match(s, /link taps unknown/);
+  assert.match(s, /link taps 0/);
+  const kept = keepLinkTaps({ fetchedAt: 'b' }, { fetchedAt: 'a', linkTaps: 2 });
+  assert.deepEqual([kept.linkTaps, kept.linkTapsFrom], [2, 'a']);
+  assert.equal(keepLinkTaps({ fetchedAt: 'c' }, kept).linkTapsFrom, 'a'); // still the original read, not the last carry
+  const read = keepLinkTaps({ fetchedAt: 'b', linkTaps: 3 }, { fetchedAt: 'a', linkTaps: 2 });
+  assert.deepEqual([read.linkTaps, read.linkTapsFrom], [3, undefined]);
+  assert.equal(keepLinkTaps({ fetchedAt: 'b' }, undefined).linkTaps, undefined);
+});
+
+test('item 4: a carried count reads as a minimum, and the unsplit warning is said once, at 7 days', () => {
+  const s = performanceSummary(many(10, (n) => ({ reach: 200, saved: n, linkTaps: 1, ...(n === 9 ? { linkTapsFrom: 'a' } : {}) })));
+  assert.match(s, /link taps at least 1/);
+  const unsplit: PostInsights = { fetchedAt: 'b', profileActions: 3 };
+  assert.match(unsplitWarning('p1', unsplit, ['7d'])!, /3 profile action\(s\) at 7 days.*link taps are unknown/);
+  assert.match(unsplitWarning('p1', { ...unsplit, linkTaps: 1, linkTapsFrom: 'a' }, ['7d'])!, /at least 1 \(read a\)/);
+  assert.equal(unsplitWarning('p1', unsplit, ['48h']), undefined); // not before 7 days
+  assert.equal(unsplitWarning('p1', unsplit, []), undefined); // nor on later Sunday refreshes
+  assert.equal(unsplitWarning('p1', { fetchedAt: 'b', linkTaps: 0 }, ['7d']), undefined);
 });

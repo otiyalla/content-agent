@@ -90,7 +90,7 @@ function reportHtml(posts: CalendarPost[]): string {
       const link = p.published?.permalink ? `<a href="${p.published.permalink}">${title}</a>` : title;
       const ageH = p.published && i.fetchedAt ? Math.round((Date.parse(i.fetchedAt) - Date.parse(p.published.publishedAt)) / 3600_000) : null;
       const age = ageH === null ? '–' : ageH < 48 ? `${ageH}h` : `${Math.round(ageH / 24)}d`;
-      return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${age}</td><td>${i.reach ?? '–'}</td><td><b>${i.follows ?? '–'}</b></td><td>${i.profileVisits ?? '–'}</td><td>${i.linkTaps ?? '–'}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
+      return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${age}</td><td>${i.reach ?? '–'}</td><td><b>${i.follows ?? '–'}</b></td><td>${i.profileVisits ?? '–'}</td><td>${i.linkTaps === undefined ? '–' : `${i.linkTapsFrom ? '≥' : ''}${i.linkTaps}`}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
     })
     .join('');
   return `<p style="color:#667;font-size:12px;margin:0 0 6px">Latest numbers. Posts of different ages aren't comparable; the planner compares them at 7 days.</p>

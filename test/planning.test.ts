@@ -54,16 +54,72 @@ test('new plans must carry a topic from the list', () => {
 });
 
 test('AC-18: the bio link is website_clicks, and one failing metric leaves the others', async () => {
-  const asked: string[] = [];
-  globalThis.fetch = (async (input: string) => {
-    const metric = new URL(input).searchParams.get('metric')!;
-    asked.push(metric);
-    if (metric === 'reach') return new Response(JSON.stringify({ error: { message: 'gone' } }), { status: 400 });
-    return new Response(JSON.stringify({ data: [{ name: metric, total_value: { value: metric === 'website_clicks' ? 5 : 3 } }] }));
-  }) as unknown as typeof fetch;
-  const a = await instagramService.getAccountInsights(new Date(0), new Date());
-  assert.deepEqual(a, { profileViews: 3, websiteClicks: 5 });
-  assert.ok(!asked.join().includes('profile_links_taps'));
-  const w = weekEntry(a, undefined, new Date('2026-11-30T01:00:00Z')); // Sunday's report, slipped into Monday
-  assert.deepEqual([w.id, w.reach, w.followers, w.websiteClicks], ['2026-W48', null, null, 5]);
+  const real = globalThis.fetch;
+  try {
+    const asked: string[] = [];
+    globalThis.fetch = (async (input: string) => {
+      const metric = new URL(input).searchParams.get('metric')!;
+      asked.push(metric);
+      if (metric === 'reach') return new Response(JSON.stringify({ error: { message: 'gone' } }), { status: 400 });
+      return new Response(JSON.stringify({ data: [{ name: metric, total_value: { value: metric === 'website_clicks' ? 5 : 3 } }] }));
+    }) as unknown as typeof fetch;
+    const a = await instagramService.getAccountInsights(new Date(0), new Date());
+    assert.deepEqual(a, { profileViews: 3, websiteClicks: 5 });
+    assert.ok(!asked.join().includes('profile_links_taps'));
+    const w = weekEntry(a, undefined, new Date('2026-11-30T01:00:00Z')); // Sunday's report, slipped into Monday
+    assert.deepEqual([w.id, w.reach, w.followers, w.websiteClicks], ['2026-W48', null, null, 5]);
+  } finally {
+    globalThis.fetch = real;
+  }
+});
+
+test('item 4: post link taps read either spelling, a plain 0, and leave an unsplit total blank', async () => {
+  const real = globalThis.fetch;
+  const reply = (activity: unknown) =>
+    (async (input: string) => {
+      const metric = new URL(input).searchParams.get('metric')!;
+      if (metric === 'profile_activity') {
+        assert.equal(new URL(input).searchParams.get('metric_type'), 'total_value');
+        return new Response(JSON.stringify({ data: [activity] }));
+      }
+      return new Response(JSON.stringify({ data: [{ name: 'reach', values: [{ value: 40 }] }] }));
+    }) as unknown as typeof fetch;
+  const broken = (rows: Array<[string, number]>) => ({
+    name: 'profile_activity',
+    total_value: { value: rows.reduce((s, r) => s + r[1], 0), breakdowns: [{ dimension_keys: ['action_type'], results: rows.map(([d, value]) => ({ dimension_values: [d], value })) }] },
+  });
+  const taps = async () => (await instagramService.getInsights('1')).linkTaps;
+  try {
+    globalThis.fetch = reply(broken([['BIO_LINK_CLICKED', 3], ['CALL', 1]]));
+    assert.equal(await taps(), 3);
+    globalThis.fetch = reply(broken([['bio_link_clicked', 2]]));
+    assert.equal(await taps(), 2);
+    globalThis.fetch = reply(broken([['DIRECTION', 2]]));
+    assert.equal(await taps(), 0);
+    // The live reply for a post nobody acted on (single image and carousel alike), 26 Nov 2026.
+    globalThis.fetch = reply({ name: 'profile_activity', period: 'lifetime', values: [{ value: 0 }] });
+    const quiet = await instagramService.getInsights('1');
+    assert.equal(quiet.linkTaps, 0);
+    assert.equal(quiet.reach, 40);
+    // A total that can't be split, with or without an empty breakdown entry (the shape the account metric came back in).
+    // The service stays quiet and keeps the total; refreshInsights says it once (unsplitWarning).
+    const warned: unknown[] = [];
+    const realWarn = console.warn;
+    console.warn = (...a: unknown[]) => void warned.push(a);
+    try {
+      globalThis.fetch = reply({ name: 'profile_activity', period: 'lifetime', values: [{ value: 4 }] });
+      const unsplit = await instagramService.getInsights('1');
+      assert.deepEqual([unsplit.linkTaps, unsplit.profileActions], [undefined, 4]);
+      globalThis.fetch = reply({ name: 'profile_activity', total_value: { value: 2, breakdowns: [{ dimension_keys: ['action_type'] }] } });
+      assert.equal((await instagramService.getInsights('1')).profileActions, 2);
+      globalThis.fetch = reply({ name: 'profile_activity', total_value: { value: 0, breakdowns: [{ dimension_keys: ['action_type'] }] } });
+      const zero = await instagramService.getInsights('1');
+      assert.deepEqual([zero.linkTaps, zero.profileActions], [0, undefined]);
+    } finally {
+      console.warn = realWarn;
+    }
+    assert.deepEqual(warned, []);
+  } finally {
+    globalThis.fetch = real;
+  }
 });

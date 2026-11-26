@@ -259,14 +259,27 @@ export class InstagramService {
       if (typeof value === 'number') (out as unknown as Record<string, number>)[names[m.name] ?? m.name] = value;
     }
     // Bio-link taps come from profile_activity broken down by action type. Optional: never fail the fetch over it.
+    // Checked live 26 Nov 2026: with no profile actions Meta sends a plain `values: [{ value: 0 }]` and no breakdown,
+    // for single images and carousels alike. Meta documents the action as BIO_LINK_CLICKED, so match either case.
+    // A non-zero total without a breakdown can't be split, so link taps are left blank rather than counted as 0,
+    // and the total is kept so refreshInsights can say so once. metric_type total_value is what Meta's breakdowns
+    // are documented for; checked live 26 Nov 2026 that media insights accept it.
     try {
-      const act = await this.call<{ data: Array<{ total_value?: { value?: number; breakdowns?: Array<{ results?: Array<{ dimension_values: string[]; value: number }> }> } }> }>(
-        'GET',
-        `${mediaId}/insights`,
-        { metric: 'profile_activity', breakdown: 'action_type' },
-      );
-      const results = act.data[0]?.total_value?.breakdowns?.[0]?.results ?? [];
-      out.linkTaps = results.filter((r) => r.dimension_values.includes('bio_link_clicked')).reduce((sum, r) => sum + r.value, 0);
+      const act = await this.call<{
+        data: Array<{ values?: Array<{ value: number }>; total_value?: { value?: number; breakdowns?: Array<{ results?: Array<{ dimension_values: string[]; value: number }> }> } }>;
+      }>('GET', `${mediaId}/insights`, { metric: 'profile_activity', breakdown: 'action_type', metric_type: 'total_value' });
+      const row = act.data[0];
+      const total = row?.total_value?.value ?? row?.values?.[0]?.value;
+      const results = row?.total_value?.breakdowns?.[0]?.results ?? [];
+      if (results.length) {
+        out.linkTaps = results
+          .filter((r) => r.dimension_values.some((d) => d.toLowerCase() === 'bio_link_clicked'))
+          .reduce((sum, r) => sum + r.value, 0);
+      } else if (total === 0) {
+        out.linkTaps = 0;
+      } else if (typeof total === 'number') {
+        out.profileActions = total;
+      }
     } catch {
       // older posts or API versions may not support the breakdown
     }

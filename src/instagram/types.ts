@@ -111,6 +111,10 @@ export interface PostInsights {
   follows?: number; // accounts that followed from this post
   profileVisits?: number; // profile visits from this post
   linkTaps?: number; // taps on the link in bio after viewing this post
+  /** Set when linkTaps was carried from an earlier read (its fetchedAt): taps only grow, so the count is a minimum. */
+  linkTapsFrom?: string;
+  /** All profile actions from this post; kept when Meta doesn't split them by type, so link taps stay unknown. */
+  profileActions?: number;
 }
 
 export interface CalendarPost extends Omit<PlannedPost, 'slot' | 'topicId'> {

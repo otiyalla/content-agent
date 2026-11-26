@@ -1,6 +1,6 @@
 import { instagramService } from '../services/social/instagram.service';
 import { listWeeks, loadCalendar, saveCalendar } from './calendar';
-import type { CalendarPost, SnapshotAge } from './types';
+import type { CalendarPost, PostInsights, SnapshotAge } from './types';
 
 // ---------------------------------------------------------------------------
 // Post insights.
@@ -35,6 +35,28 @@ export function dueSnapshots(post: CalendarPost, now: Date): SnapshotAge[] {
 }
 
 /**
+ * Link taps only grow, so a fetch Meta couldn't split by type mustn't erase a count read earlier. The carried
+ * count is marked with when it was read (linkTapsFrom), since it is a minimum, not the figure at this age.
+ */
+export function keepLinkTaps(fresh: PostInsights, previous?: PostInsights): PostInsights {
+  if (fresh.linkTaps === undefined && typeof previous?.linkTaps === 'number') {
+    fresh.linkTaps = previous.linkTaps;
+    fresh.linkTapsFrom = previous.linkTapsFrom ?? previous.fetchedAt;
+  }
+  return fresh;
+}
+
+/**
+ * One warning per post when its 7-day snapshot has profile actions Meta didn't split by type, so link taps
+ * are unknown or only a minimum. Said at the 7-day snapshot only, so later refreshes don't repeat it.
+ */
+export function unsplitWarning(postId: string, fresh: PostInsights, due: SnapshotAge[]): string | undefined {
+  if (!due.includes('7d') || fresh.profileActions === undefined) return undefined;
+  const taps = fresh.linkTaps === undefined ? 'unknown' : `at least ${fresh.linkTaps} (read ${fresh.linkTapsFrom})`;
+  return `[Insights] ${postId}: ${fresh.profileActions} profile action(s) at 7 days but no breakdown by type, so link taps are ${taps}`;
+}
+
+/**
  * Updates insights for published posts in the last `weeks` calendars and saves them.
  *   mode "snapshots": only fetch posts with a fixed-age snapshot due (cheap; every publisher run)
  *   mode "all":       also refresh the latest numbers of every post older than 24h (Sunday planner)
@@ -59,6 +81,9 @@ export async function refreshInsights(weeks = 4, opts: { mode?: 'all' | 'snapsho
       if (!due.length && !wantLatest) continue;
       try {
         const fresh = await instagramService.getInsights(post.published.mediaId);
+        keepLinkTaps(fresh, post.insights);
+        const warning = unsplitWarning(post.id, fresh, due);
+        if (warning) console.warn(warning);
         post.insights = fresh;
         for (const k of due) {
           post.insightSnapshots = { ...post.insightSnapshots, [k]: fresh };

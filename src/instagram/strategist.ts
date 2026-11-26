@@ -171,7 +171,7 @@ export function performanceSummary(posts: CalendarPost[], now = new Date()): str
     `[${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}, ${p.id.split('-').pop()}, hook ${p.hookType ?? '?'}, cta ${p.ctaType ?? '?'}] "${(p.slides[0]?.title ?? '').replace(/\*\*/g, '')}"`;
   // Below MIN_FOLLOWS a rate per 1,000 is one follow more or less, so only the count is shown.
   const line = ({ p, i, reach, followRate, rate }: (typeof scored)[number]) =>
-    `- ${label(p)} — at 7 days: reach ${reach}, follows ${i.follows ?? 0}${byFollows ? ` (${followRate.toFixed(1)} per 1k reach)` : ''}, profile visits ${i.profileVisits ?? 0}, link taps ${i.linkTaps ?? 0}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement ${(rate * 100).toFixed(1)}%`;
+    `- ${label(p)} — at 7 days: reach ${reach}, follows ${i.follows ?? 0}${byFollows ? ` (${followRate.toFixed(1)} per 1k reach)` : ''}, profile visits ${i.profileVisits ?? 0}, link taps ${i.linkTaps === undefined ? 'unknown' : i.linkTapsFrom ? `at least ${i.linkTaps}` : i.linkTaps}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement ${(rate * 100).toFixed(1)}%`;
 
   // Follows per 1,000 reach by tag, pooled (all follows over all reach), so one small post can't dominate.
   const byTag = (key: 'hookType' | 'ctaType') => {

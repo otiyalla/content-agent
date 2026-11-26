@@ -18,8 +18,9 @@ Mon–Thu + Sat 13:07 ─ publisher ──► renders the post from the calendar
 Every publisher run also freezes each post's insights at 48 hours and 7 days (follows, profile visits,
 link-in-bio taps, reach, saves, shares) and records the follower count in
 content/instagram/account-history.json. Sunday's report stores the week's profile views, link-in-bio taps and reach in
-account-metrics.json. The planner ranks posts by follows per 1,000 reach at 48 hours,
-and only once about 10 posts are measured.
+account-metrics.json. The planner ranks posts on their 7-day numbers (Meta's can lag 48 hours),
+and only once 10 posts reaching at least 30 accounts each are measured, with 1,000 reached in all.
+It ranks by follows per 1,000 reach once there are 10 follows; before that, by engagement only.
 ```
 
 **Posting schedule** (`src/instagram/calendar.ts` → `WEEKLY_SLOTS`), all at 13:00 UTC, each a named series shown as the cover kicker:

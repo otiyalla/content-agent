@@ -383,7 +383,7 @@ the Instagram source is a separate GET-only client (AC-1).
 - FR-PLN-2. Calendar posts gain optional `topicId` and `briefId` (opaque). Optional means old weeks stay valid.
 - FR-PLN-3. **Machine-fed (T3):** only if ≥ 4 of 6 hand briefs were judged useful. ≤ 1 brief a week, leading at most 1 of 5 posts, tagged `evidence_kind: question | count`. Missing or > 8 days old: planning proceeds as today.
 - FR-PLN-4. `topic`, `theme`, `rationale` and notes are linted for competitor names, quotes and the FR-CMP-6 phrases. The check must not print or commit the list of names.
-- FR-PLN-5. Brief results go beside the post's own 48 h snapshot. No conclusion below the planner's existing 10-post minimum.
+- FR-PLN-5. Brief results go beside the post's own 7-day snapshot, the one the planner ranks on. No conclusion while the planner's own gate is shut (10 posts reaching 30+ accounts each, 1,000 reached in all).
 
 ### 6.9 Listening (FR-LIS): before outbound
 

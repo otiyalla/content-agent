@@ -12,6 +12,7 @@ import { ZENLOT_SERIES, type Slot } from './calendar';
 import { topicsForPrompt } from './taxonomy';
 import { eventIssues, eventNotes, eventsRunOut, lateForEvent, postFields } from './events';
 import { seasonalNotes } from './seasonal';
+import { SNAPSHOTS } from './insights';
 
 // ---------------------------------------------------------------------------
 // The Instagram strategist: plans a full week of posts in one structured call.
@@ -123,74 +124,108 @@ export interface PlanningContext {
   weekStart?: Date; // Monday of the planned week, for seasonal moments and market events
 }
 
-// Below this many posts measured at the same age, rankings are noise.
-const MIN_MEASURED_POSTS = 10;
+// The gate before the planner may compare posts. Counting posts alone isn't enough: ten posts with a
+// reach of 3 would pass, and a single follow would read as 333 per 1,000. So it also needs enough people.
+export const MIN_MEASURED_POSTS = 10; // posts measured at the same age
+export const MIN_POST_REACH = 30; // below this, a post's rates are noise and it isn't ranked
+export const MIN_TOTAL_REACH = 1000; // accounts reached across the ranked posts
+export const MIN_FOLLOWS = 10; // follows across the ranked posts before follows per 1,000 can rank
+// Ranked on the 7-day snapshot: Meta's numbers can still be filling in at 48 hours.
+const AGE = '7d';
 
 /**
- * What the planner learns from. Posts are compared only on their 48-hour
- * snapshot (same age for every post), and posts with zero reach are left out
- * as unreliable. Until enough posts are measured, the planner is told not to
- * draw conclusions at all.
+ * What the planner learns from. Posts are compared only on their 7-day
+ * snapshot (same age for every post), and posts reaching fewer than
+ * MIN_POST_REACH accounts are left out. Until enough posts and people are
+ * measured, the planner is told not to draw conclusions at all; until enough
+ * follows, posts are ranked on engagement only.
  */
-export function performanceSummary(posts: CalendarPost[]): string {
+export function performanceSummary(posts: CalendarPost[], now = new Date()): string {
   const published = posts.filter((p) => p.status === 'published');
   if (published.length === 0) return 'No published posts yet — this is a fresh account. Follow the brief and the pillar mix.';
 
-  const at48 = published.filter((p) => p.insightSnapshots?.['48h']);
-  const measured = at48.filter((p) => (p.insightSnapshots!['48h']!.reach ?? 0) > 0);
-  const zeroReach = at48.length - measured.length;
-  const notYet = published.length - at48.length;
+  const aged = published.filter((p) => p.insightSnapshots?.[AGE]);
+  const noReach = aged.filter((p) => typeof p.insightSnapshots![AGE]!.reach !== 'number');
+  const measured = aged.filter((p) => (p.insightSnapshots![AGE]!.reach ?? 0) >= MIN_POST_REACH);
+  const lowReach = aged.filter((p) => !noReach.includes(p) && !measured.includes(p));
+  // Past the snapshot window with no snapshot: the window was missed, and it won't be taken later.
+  const closes = SNAPSHOTS[AGE].at + SNAPSHOTS[AGE].window;
+  const unaged = published.filter((p) => !p.insightSnapshots?.[AGE]);
+  const missed = unaged.filter((p) => p.published && now.getTime() - Date.parse(p.published.publishedAt) >= closes).length;
+  const notYet = unaged.length - missed;
 
-  // Growth first: follows per 1,000 reach. Weighted engagement (saves and shares count most) breaks ties.
-  const scored = measured
-    .map((p) => {
-      const i = p.insightSnapshots!['48h']!;
-      const reach = i.reach ?? 0;
-      const engagement = (i.saved ?? 0) * 3 + (i.shares ?? 0) * 3 + (i.comments ?? 0) * 2 + (i.likes ?? 0);
-      return { p, i, reach, followRate: ((i.follows ?? 0) / reach) * 1000, rate: engagement / reach };
-    })
-    .sort((a, b) => b.followRate - a.followRate || b.rate - a.rate);
+  const scored = measured.map((p) => {
+    const i = p.insightSnapshots![AGE]!;
+    const reach = i.reach ?? 0;
+    const engagement = (i.saved ?? 0) * 3 + (i.shares ?? 0) * 3 + (i.comments ?? 0) * 2 + (i.likes ?? 0);
+    return { p, i, reach, follows: i.follows ?? 0, followRate: ((i.follows ?? 0) / reach) * 1000, rate: engagement / reach };
+  });
+  const totalReach = scored.reduce((a, s) => a + s.reach, 0);
+  const totalFollows = scored.reduce((a, s) => a + s.follows, 0);
+  const byFollows = totalFollows >= MIN_FOLLOWS;
+  // Growth first: follows per 1,000 reach, with weighted engagement (saves and shares count most) breaking ties.
+  // Until there are enough follows to compare, one follow more or less decides the order, so use engagement only.
+  scored.sort((a, b) => (byFollows ? b.followRate - a.followRate : 0) || b.rate - a.rate);
 
+  const label = (p: CalendarPost) =>
+    `[${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}, ${p.id.split('-').pop()}, hook ${p.hookType ?? '?'}, cta ${p.ctaType ?? '?'}] "${(p.slides[0]?.title ?? '').replace(/\*\*/g, '')}"`;
+  // Below MIN_FOLLOWS a rate per 1,000 is one follow more or less, so only the count is shown.
   const line = ({ p, i, reach, followRate, rate }: (typeof scored)[number]) =>
-    `- [${p.pillar}, ${p.slides.length > 1 ? 'carousel' : p.slides[0]?.layout}, ${p.id.split('-').pop()}, hook ${p.hookType ?? '?'}, cta ${p.ctaType ?? '?'}] "${(p.slides[0]?.title ?? '').replace(/\*\*/g, '')}" — at 48h: reach ${reach}, follows ${i.follows ?? 0} (${followRate.toFixed(1)} per 1k reach), profile visits ${i.profileVisits ?? 0}, link taps ${i.linkTaps ?? 0}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement ${(rate * 100).toFixed(1)}%`;
+    `- ${label(p)} — at 7 days: reach ${reach}, follows ${i.follows ?? 0}${byFollows ? ` (${followRate.toFixed(1)} per 1k reach)` : ''}, profile visits ${i.profileVisits ?? 0}, link taps ${i.linkTaps ?? 0}, saves ${i.saved ?? 0}, shares ${i.shares ?? 0}, weighted engagement ${(rate * 100).toFixed(1)}%`;
 
-  // Averages by tag, so the planner sees which hooks and CTAs grow the account.
+  // Follows per 1,000 reach by tag, pooled (all follows over all reach), so one small post can't dominate.
   const byTag = (key: 'hookType' | 'ctaType') => {
-    const groups = new Map<string, number[]>();
+    const groups = new Map<string, { n: number; reach: number; follows: number }>();
     for (const s of scored) {
       const tag = s.p[key] ?? 'untagged';
-      groups.set(tag, [...(groups.get(tag) ?? []), s.followRate]);
+      const g = groups.get(tag) ?? { n: 0, reach: 0, follows: 0 };
+      groups.set(tag, { n: g.n + 1, reach: g.reach + s.reach, follows: g.follows + s.follows });
     }
     return [...groups.entries()]
-      .map(([tag, rates]) => ({ tag, n: rates.length, avg: rates.reduce((a, b) => a + b, 0) / rates.length }))
+      .map(([tag, g]) => ({ tag, n: g.n, avg: (g.follows / g.reach) * 1000 }))
       .sort((a, b) => b.avg - a.avg)
       .map((g) => `${g.tag} ${g.avg.toFixed(1)}/1k (${g.n} post${g.n > 1 ? 's' : ''})`)
       .join(', ');
   };
 
   const counts = [
-    `${published.length} published post(s); ${measured.length} measured at 48 hours`,
-    notYet ? `${notYet} not yet measured (too new, or published before snapshots existed)` : '',
-    zeroReach ? `${zeroReach} left out for zero reach` : '',
+    `${published.length} published post(s); ${measured.length} measured at 7 days, reaching ${totalReach} accounts with ${totalFollows} follow(s)`,
+    notYet ? `${notYet} not yet measured (younger than 7 days)` : '',
+    missed ? `${missed} with no 7-day numbers (published before snapshots existed, or the snapshot was missed)` : '',
+    lowReach.length ? `${lowReach.length} left out for reaching fewer than ${MIN_POST_REACH} accounts` : '',
+    noReach.length ? `${noReach.length} left out because Instagram reported no reach` : '',
   ].filter(Boolean).join('; ');
 
-  if (measured.length < MIN_MEASURED_POSTS) {
+  // Shown by name so the planner sees what flopped, not just the weakest of the posts that were ranked.
+  const flops = lowReach.length
+    ? [`Reached fewer than ${MIN_POST_REACH} accounts at 7 days, so not ranked:`, ...lowReach.map((p) => `- ${label(p)} — reach ${p.insightSnapshots![AGE]!.reach}`)]
+    : [];
+
+  const short = [
+    measured.length < MIN_MEASURED_POSTS ? `${MIN_MEASURED_POSTS} posts measured at 7 days` : '',
+    totalReach < MIN_TOTAL_REACH ? `a combined reach of ${MIN_TOTAL_REACH.toLocaleString('en-US')}` : '',
+  ].filter(Boolean);
+  if (short.length) {
     return [
-      `NOT ENOUGH DATA YET: ${counts}. About ${MIN_MEASURED_POSTS} posts measured at the same age are needed before comparing.`,
+      `NOT ENOUGH DATA YET: ${counts}. Comparing needs ${short.join(' and ')}, counting only posts that reached at least ${MIN_POST_REACH} accounts.`,
       'Do not infer what works or doesn\'t from these numbers, and don\'t cite them as evidence in rationales. Follow the brief and the pillar mix, and vary formats so future weeks can be compared.',
       ...(scored.length ? ['For reference only:', ...scored.map(line)] : []),
+      ...flops,
     ].join('\n');
   }
 
   return [
-    `${counts}. All numbers below are at 48 hours after publishing, so posts are comparable. Posts are ranked by follows per 1,000 reach (growth), then by weighted engagement.`,
+    byFollows
+      ? `${counts}. All numbers below are at 7 days after publishing, so posts are comparable. Posts are ranked by follows per 1,000 reach (growth), then by weighted engagement.`
+      : `${counts}. All numbers below are at 7 days after publishing, so posts are comparable. Fewer than ${MIN_FOLLOWS} follows so far, too few to compare growth, so posts are ranked by weighted engagement only. Don't draw conclusions about which posts bring follows.`,
     'Best performers:',
     ...scored.slice(0, 3).map(line),
     'Weakest performers:',
     ...scored.slice(-3).reverse().map(line),
-    `Follows per 1k reach by hook: ${byTag('hookType')}.`,
-    `Follows per 1k reach by CTA: ${byTag('ctaType')}.`,
-    'Groups with fewer than 3 posts are hints, not evidence.',
+    ...(byFollows
+      ? [`Follows per 1k reach by hook: ${byTag('hookType')}.`, `Follows per 1k reach by CTA: ${byTag('ctaType')}.`, 'Groups with fewer than 3 posts are hints, not evidence.']
+      : []),
+    ...flops,
   ].join('\n');
 }
 

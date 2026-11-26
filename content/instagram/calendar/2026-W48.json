@@ -168,6 +168,32 @@
         "imageUrls": [
           "https://social.zenlot.net/instagram/2026-W48/2026-W48-tue/1-9d70f5de03bd.jpg"
         ]
+      },
+      "insights": {
+        "fetchedAt": "2026-11-26T14:07:24.003Z",
+        "reach": 4,
+        "saved": 0,
+        "shares": 1,
+        "likes": 0,
+        "comments": 0,
+        "views": 4,
+        "follows": 0,
+        "profileVisits": 0,
+        "linkTaps": 0
+      },
+      "insightSnapshots": {
+        "48h": {
+          "fetchedAt": "2026-11-26T14:07:24.003Z",
+          "reach": 4,
+          "saved": 0,
+          "shares": 1,
+          "likes": 0,
+          "comments": 0,
+          "views": 4,
+          "follows": 0,
+          "profileVisits": 0,
+          "linkTaps": 0
+        }
       }
     },
     {

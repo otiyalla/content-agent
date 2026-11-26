@@ -280,7 +280,7 @@
     {
       "id": "2026-W48-thu",
       "scheduledAt": "2026-11-26T13:00:00.000Z",
-      "status": "scheduled",
+      "status": "published",
       "pillar": "myth-busting",
       "topic": "High win rate does not equal profitability; expectancy depends on payoff size",
       "slides": [
@@ -309,7 +309,15 @@
       "rationale": "Myth-vs-fact singles are shareable because they challenge a belief many beginners hold. With a fresh account, this also tests a contrarian single against Tuesday's checklist. It builds on Wednesday's expectancy maths from the opposite direction (a low win rate can win, a high one can lose), using fully shown arithmetic. It also adds a third single-image layout to the grid.",
       "previewHash": "c3a5ca03c086fd66",
       "previewedAt": "2026-11-24T02:49:03.533Z",
-      "previewRenderHash": "4f0d5a80f283fef0"
+      "previewRenderHash": "4f0d5a80f283fef0",
+      "published": {
+        "mediaId": "18119994182332287",
+        "permalink": "https://www.instagram.com/p/DgNLOHCEVrv/",
+        "publishedAt": "2026-11-26T13:07:38.797Z",
+        "imageUrls": [
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-thu/1-f572354bbc6f.jpg"
+        ]
+      }
     },
     {
       "id": "2026-W48-sat",

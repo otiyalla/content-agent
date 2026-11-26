@@ -93,7 +93,7 @@ function reportHtml(posts: CalendarPost[]): string {
       return `<tr><td>${p.id.split('-').pop()}</td><td>${link}</td><td>${age}</td><td>${i.reach ?? '–'}</td><td><b>${i.follows ?? '–'}</b></td><td>${i.profileVisits ?? '–'}</td><td>${i.linkTaps ?? '–'}</td><td>${i.saved ?? '–'}</td><td>${i.shares ?? '–'}</td><td>${i.likes ?? '–'}</td><td>${i.comments ?? '–'}</td></tr>`;
     })
     .join('');
-  return `<p style="color:#667;font-size:12px;margin:0 0 6px">Latest numbers. Posts of different ages aren't comparable; the planner compares them at 48 hours.</p>
+  return `<p style="color:#667;font-size:12px;margin:0 0 6px">Latest numbers. Posts of different ages aren't comparable; the planner compares them at 7 days.</p>
 <table cellpadding="6" style="border-collapse:collapse;font-size:13px">
 <tr style="background:#f2f4f7;text-align:left"><th>Day</th><th>Post</th><th>Age</th><th>Reach</th><th>Follows</th><th>Profile visits</th><th>Link taps</th><th>Saves</th><th>Shares</th><th>Likes</th><th>Comments</th></tr>${rows}</table>`;
 }

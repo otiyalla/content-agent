@@ -369,12 +369,38 @@
         "imageUrls": [
           "https://social.zenlot.net/instagram/2026-W48/2026-W48-thu/1-f572354bbc6f.jpg"
         ]
+      },
+      "insights": {
+        "fetchedAt": "2026-11-28T14:08:24.677Z",
+        "reach": 10,
+        "saved": 0,
+        "shares": 0,
+        "likes": 4,
+        "comments": 0,
+        "views": 17,
+        "follows": 0,
+        "profileVisits": 0,
+        "linkTaps": 0
+      },
+      "insightSnapshots": {
+        "48h": {
+          "fetchedAt": "2026-11-28T14:08:24.677Z",
+          "reach": 10,
+          "saved": 0,
+          "shares": 0,
+          "likes": 4,
+          "comments": 0,
+          "views": 17,
+          "follows": 0,
+          "profileVisits": 0,
+          "linkTaps": 0
+        }
       }
     },
     {
       "id": "2026-W48-sat",
       "scheduledAt": "2026-11-28T14:00:00.000Z",
-      "status": "scheduled",
+      "status": "published",
       "pillar": "product",
       "topic": "Fixed lot sizes create hidden variable risk; size from risk % and stop distance (Zenlot weekly mention)",
       "slides": [
@@ -448,7 +474,20 @@
       "rationale": "This is the week's only Zenlot mention, scheduled last so four value-first posts build trust before it. It leads with a concrete problem and a worked formula that's worth saving even without the app. All figures check out (0.2 lots × $10 × 25 pips = $50; 0.5 × $10 × 60 = $300 = 6%). With no baseline yet, comparing its saves to Monday's carousel will show whether product posts can perform when they lead with education.",
       "previewHash": "41899c6f1d2932b3",
       "previewedAt": "2026-11-24T02:49:03.533Z",
-      "previewRenderHash": "2c14f85940851a39"
+      "previewRenderHash": "2c14f85940851a39",
+      "published": {
+        "mediaId": "17965642527254251",
+        "permalink": "https://www.instagram.com/p/DgSbwluje37/",
+        "publishedAt": "2026-11-28T14:08:24.675Z",
+        "imageUrls": [
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-sat/1-b98dc9476293.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-sat/2-d007d6f65b83.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-sat/3-d40f31b9562d.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-sat/4-3df822166812.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-sat/5-ab97be4d9011.jpg",
+          "https://social.zenlot.net/instagram/2026-W48/2026-W48-sat/6-22ec3538ab28.jpg"
+        ]
+      }
     }
   ]
 }

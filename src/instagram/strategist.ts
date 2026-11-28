@@ -69,7 +69,7 @@ Slide layouts available (field usage):
 - mythfact: kicker ("Myth vs fact"), title = the myth (<= 15 words), body = the fact (<= 30 words)
 - quote:    kicker (category), title = a punchy original one-liner (<= 16 words), body = short framing (<= 6 words)
 - question: kicker ("Your turn"), title = the question (<= 10 words), items = 2-4 answer options (<= 5 words each), body = optional nudge
-- cta:      title (<= 8 words: save/share prompt), body (<= 25 words; may mention Zenlot softly + "link in bio")
+- cta:      title (<= 8 words: the post's one ask, matching its ctaType; the template adds the button), body (<= 25 words; may mention Zenlot softly + "link in bio")
 - screen:   a REAL Zenlot app screenshot in a phone frame. kicker (1-2 words), title (<= 7 words), body (<= 14 words),
             screen = one of the screen ids below. All other fields empty. The top ~60% of the screenshot is visible.
 
@@ -86,7 +86,9 @@ Screen rules:
 Text highlighting: wrap 1-3 key words in **double asterisks** inside title/body to render them in the brand accent colour.
 Use it on most slides, sparingly.
 Slide characters: the slide font only has basic Latin letters, digits and common punctuation. Write maths in plain
-text ("0.6^5 = 7.8%", "about 1 in 13", "x", "/", "~"). No superscripts, ≈, arrows, ticks or emoji on slides.
+words and plain sums ("0.6 x 0.6 x 0.6 x 0.6 x 0.6 = 7.8%", "about 1 in 13"). Never code notation: no "^", "~", superscripts,
+≈, arrows, ticks or emoji on slides. Say "about" instead of "~". For a long chain, say it ("ten losses in a row at 1% each
+leaves 90.4%") rather than writing a power. Highlight what's true, never the mistake or the myth.
 Show your working: write each calculation as a plain equation ("3 / 7 = 42.9%", "$50 / (25 x $10) = 0.2 lots")
 so it can be re-checked automatically. Slides with money amounts get an "Illustrative example" label automatically.
 
@@ -112,7 +114,8 @@ ${topicsForPrompt()}
 - Expand on the post; give one extra insight not on the slides.
 - End with a call to action (save / share with a trading friend / comment) then the disclaimer line.
 - No hashtags in the caption — they go in the hashtags field (3-5, specific, e.g. forextrading, riskmanagement,
-  tradingpsychology, forexeducation, tradingjournal; avoid generic spam like #money #rich).
+  tradingpsychology, forexeducation, tradingjournal; avoid generic spam like #money #rich). Choose them for the
+  post's own topic: no tag appears on more than 2 of the week's posts.
 `;
 
 export interface PlanningContext {
@@ -329,6 +332,9 @@ Produce the week plan.`;
 const CROSS_DAY_REF =
   /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)['’]s\s+(?:post|maths?|lesson|carousel|checklist|slide|numbers|example)|\byesterday['’]?s?\s+post|\bearlier this week\b|\b(?:last|previous|our last)\s+post\b/i;
 
+// The ask a closing title opens with. "Follow your plan" is advice, not an ask.
+const CTA_TITLE = /^\s*(?:(?:save|bookmark|share|send)\s+(?:this|it)\b|follow\s+(?:for|us|@)|comment\b)/i;
+
 export interface PlanCheck {
   /** One post per slot. `held` says why a post must never be published as it is; only that post is held, not the week. */
   posts: Array<{ post: PlannedPost; held: string[] }>;
@@ -346,6 +352,10 @@ function mixWarnings(posts: PlannedPost[], minFollow: number): string[] {
   for (const [cta, n] of ctaCounts) if (n > 2) out.push(`${n} posts use the "${cta}" call to action; use each at most twice`);
   const follows = ctaCounts.get('follow') ?? 0;
   if (follows < minFollow) out.push(`only ${follows} post(s) ask people to follow; use "follow" on at least ${minFollow}`);
+  const tags = new Map<string, number>();
+  for (const p of posts) for (const t of new Set(p.hashtags.map((x) => x.toLowerCase()))) tags.set(t, (tags.get(t) ?? 0) + 1);
+  const repeated = [...tags].filter(([, n]) => n > 2).map(([t, n]) => `#${t} (${n} posts)`);
+  if (repeated.length) out.push(`hashtags repeat too much: ${repeated.join(', ')}; use each on at most 2 posts`);
   const scenario = posts.some((p) => p.slides.some((sl) => /\bhypothetical\b/i.test(`${sl.kicker} ${sl.title} ${sl.body}`)));
   if (!scenario) out.push('no post is a hypothetical scenario labelled "Hypothetical" on a slide; include exactly one');
   return out;
@@ -370,6 +380,11 @@ export async function checkPlan(plan: WeekPlan, slots: Slot[], weekStart?: Date)
     if (post.slides.length > 10) block(`has ${post.slides.length} slides`);
     else if (slot.format === 'single' && post.slides.length !== 1) warn(`is single but has ${post.slides.length} slides`);
     else if (slot.format === 'carousel' && post.slides.length < 3) warn(`carousel has ${post.slides.length} slides`);
+    const closing = post.slides.at(-1);
+    const titleAsk = closing?.layout === 'cta' ? CTA_TITLE.exec(closing.title.replace(/\*\*/g, ''))?.[0].toLowerCase() : undefined;
+    const asked = titleAsk && (/^(?:share|send)/.test(titleAsk) ? 'share' : /^follow/.test(titleAsk) ? 'follow' : /^comment/.test(titleAsk) ? 'comment' : 'save');
+    if (asked && asked !== post.ctaType) warn(`closing title asks to ${asked} but its ctaType is "${post.ctaType}", which is what the button shows`);
+    if (closing?.layout === 'screen') warn('ends on an app screen, so its ask is not on the image; end with a cta slide');
     for (const slide of post.slides) {
       if (slide.layout === 'screen' && !slide.screen) block('has a screen slide without a screen id');
       if (slide.layout !== 'screen') slide.screen = '';

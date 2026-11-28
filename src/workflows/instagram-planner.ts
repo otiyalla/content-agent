@@ -213,7 +213,7 @@ async function main() {
   for (const post of calendar.posts) {
     try {
       const fingerprint = await renderHash(post);
-      const images = await renderPost(post.slides);
+      const images = await renderPost(post);
       const qa = await qaPost(post);
       sections.push(postSectionHtml(post, images, attachments, [...new Set([...(post.held ?? []), ...qa.blocking])]));
       // Held posts aren't marked as previewed, so releasing one sends a fresh preview and waits 3 hours.

@@ -56,7 +56,7 @@ export function repoLink(file: string): string | null {
 
 /** Emails a preview of a post that changed after the last preview, or was never previewed. Throws if the email couldn't be sent. */
 export async function sendChangePreview(week: string, post: CalendarPost, publishAfter: Date, reason = 'it changed since the last preview'): Promise<void> {
-  const images = await renderPost(post.slides);
+  const images = await renderPost(post);
   const qa = await qaPost(post);
   const attachments: Attachment[] = [];
   const section = postSectionHtml(post, images, attachments, qa.blocking);

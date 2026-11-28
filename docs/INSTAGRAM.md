@@ -57,6 +57,12 @@ edit `content/instagram/calendar/<week>.json` on GitHub (the email links straigh
 | Re-plan a week | run the workflow manually with **force** ticked |
 
 Use `**double asterisks**` in slide text to highlight words in teal.
+Negative figures and myth text are highlighted in the loss colour instead.
+
+The last slide shows the post's `ctaType` as its one ask ("Follow @zenlot_app for Survival Maths"). Write slide maths in
+words: `^`, `~` between figures and superscripts are held. App screens are cut between rows using `rowEnds` in
+`src/instagram/screens.ts`; update those if a screenshot is replaced. Changing the templates makes every pending post
+wait 3 hours after a new preview, so merge such changes after Saturday's post.
 
 ## Running locally
 
